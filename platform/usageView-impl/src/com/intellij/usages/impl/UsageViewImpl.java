@@ -11,10 +11,7 @@ import com.intellij.lang.Language;
 import com.intellij.navigation.NavigationItem;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.*;
-import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ModalityState;
-import com.intellij.openapi.application.ReadAction;
-import com.intellij.openapi.application.WriteIntentReadAction;
+import com.intellij.openapi.application.*;
 import com.intellij.openapi.command.CommandProcessor;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -79,6 +76,7 @@ import java.awt.event.MouseEvent;
 import java.util.List;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -119,11 +117,15 @@ public class UsageViewImpl implements UsageViewEx {
   private volatile boolean isDisposed;
   private volatile boolean myChangesDetected;
   private @Nullable GroupNode myAutoSelectedGroupNode;
+  private final AtomicReference<@NotNull Set<UsageInfo>> myNonDisposableUsageInfos = new AtomicReference<>(Collections.emptySet());
 
   public static final Comparator<Usage> USAGE_COMPARATOR_BY_FILE_AND_OFFSET = (o1, o2) -> {
     if (o1 == o2) return 0;
-    if (o1 == NullUsage.INSTANCE || o1 == null) return -1;
-    if (o2 == NullUsage.INSTANCE || o2 == null) return 1;
+    if (o1 == null) return -1;
+    if (o2 == null) return 1;
+    if (o1 == NullUsage.INSTANCE) return -1;
+    if (o2 == NullUsage.INSTANCE) return 1;
+
     int c = compareByFileAndOffset(o1, o2);
     if (c != 0) return c;
     return o1.toString().compareTo(o2.toString());
@@ -1622,12 +1624,33 @@ public class UsageViewImpl implements UsageViewEx {
     }
   }
 
+  /**
+   * Prevents the specified usage infos from being disposed on view dispose
+   * <p>
+   *   Used by Show Usages, as navigation to the selected usage happens after the popup is disposed.
+   *   Not disposing usage infos is leak-safe, as disposing only involves getting rid of smart pointers,
+   *   which is not mandatory.
+   *   Still, when we have hundreds or thousands of usages, it's beneficial to dispose not needed ones,
+   *   which means not selected ones, which in most cases is all of them but one.
+   *   Therefore, this method is called to specify the selected usages (usually one), which then may
+   *   (but not have to) be used to navigate to the usage(s).
+   * </p>
+   * @param usageInfos the set of usage infos which won't be disposed with the vew
+   */
+  @ApiStatus.Internal
+  public void setNonDisposableUsageInfos(@NotNull Set<UsageInfo> usageInfos) {
+    myNonDisposableUsageInfos.set(usageInfos);
+  }
+
   private void disposeSmartPointers() {
+    var nonDisposableUsageInfos = myNonDisposableUsageInfos.get();
     List<SmartPsiElementPointer<?>> smartPointers = new ArrayList<>();
     for (Usage usage : myUsageNodes.keySet()) {
       if (usage instanceof UsageInfo2UsageAdapter) {
-        SmartPsiElementPointer<?> pointer = ((UsageInfo2UsageAdapter)usage).getUsageInfo().getSmartPointer();
-        smartPointers.add(pointer);
+        var usageInfo = ((UsageInfo2UsageAdapter)usage).getUsageInfo();
+        if (!nonDisposableUsageInfos.contains(usageInfo)) {
+          smartPointers.add(usageInfo.getSmartPointer());
+        }
       }
     }
 
@@ -1844,8 +1867,8 @@ public class UsageViewImpl implements UsageViewEx {
     return selectionPaths == null ? Collections.emptyList() : ContainerUtil.mapNotNull(selectionPaths, p-> ObjectUtils.tryCast(p.getLastPathComponent(), TreeNode.class));
   }
 
-  private @NotNull List<@NotNull TreeNode> allSelectedNodes() {
-    return TreeUtil.treeNodeTraverser(null).withRoots(selectedNodes()).traverse().toList();
+  private @NotNull JBIterable<TreeNode> traverseNodesRecursively(@NotNull List<TreeNode> roots) {
+    return TreeUtil.treeNodeTraverser(null).withRoots(roots).traverse();
   }
 
   @Override
@@ -1910,7 +1933,9 @@ public class UsageViewImpl implements UsageViewEx {
         protected Navigatable createDescriptorForNode(@NotNull DefaultMutableTreeNode node) {
           if (node.getChildCount() > 0) return null;
           if (node instanceof Node && ((Node)node).isExcluded()) return null;
-          return getNavigatableForNode(node, !myPresentation.isReplaceMode());
+          try (AccessToken ignore = SlowOperations.knownIssue("IJPL-162332")) {
+            return getNavigatableForNode(node, !myPresentation.isReplaceMode());
+          }
         }
 
         @Override
@@ -2003,24 +2028,23 @@ public class UsageViewImpl implements UsageViewEx {
         selection, o -> o instanceof UsageTargetNode oo ? oo.getTarget() : null);
       sink.set(USAGE_TARGETS_KEY, targets.isEmpty() ? null : targets.toArray(UsageTarget.EMPTY_ARRAY));
 
-      List<TreeNode> selectedNodes = allSelectedNodes();
       DataSink.uiDataSnapshot(sink, TreeUtil.getUserObject(getSelectedNode()));
 
+      List<TreeNode> selectedNodes = selectedNodes();
       sink.lazy(USAGES_KEY, () -> {
-        return selectedUsages(selectedNodes)
-          .toArray(n -> n == 0 ? Usage.EMPTY_ARRAY : new Usage[n]);
+        return selectedUsages(traverseNodesRecursively(selectedNodes))
+          .toArray(Usage.EMPTY_ARRAY);
       });
       sink.lazy(PlatformCoreDataKeys.PSI_ELEMENT_ARRAY, () -> {
-        return selectedUsages(selectedNodes)
-          .filter(usage -> usage instanceof PsiElementUsage)
-          .map(usage -> ((PsiElementUsage)usage).getElement())
-          .filter(element -> element != null)
-          .toArray(PsiElement.ARRAY_FACTORY::create);
+        return selectedUsages(traverseNodesRecursively(selectedNodes))
+          .filter(PsiElementUsage.class)
+          .filterMap(usage -> usage.getElement())
+          .toArray(PsiElement.EMPTY_ARRAY);
       });
       sink.lazy(CommonDataKeys.VIRTUAL_FILE_ARRAY, () -> {
-        return JBIterable.from(selectedNodes)
-          .filterMap(o -> o instanceof UsageNode ? ((UsageNode)o).getUsage() :
-                          o instanceof UsageTargetNode ? ((UsageTargetNode)o).getTarget() : null)
+        return traverseNodesRecursively(selectedNodes)
+          .filterMap(o -> o instanceof UsageNode oo ? oo.getUsage() :
+                          o instanceof UsageTargetNode oo ? oo.getTarget() : null)
           .flatMap(o -> o instanceof UsageInFile oo ? ContainerUtil.createMaybeSingletonList(oo.getFile()) :
                         o instanceof UsageInFiles oo ? Arrays.asList(oo.getFiles()) :
                         o instanceof UsageTarget oo
@@ -2033,11 +2057,11 @@ public class UsageViewImpl implements UsageViewEx {
     }
   }
 
-  private static @NotNull Stream<@NotNull Usage> selectedUsages(@NotNull List<@NotNull TreeNode> selectedNodes) {
-    return selectedNodes.stream()
-      .filter(node -> node instanceof UsageNode)
-      .map(node -> ((UsageNode)node).getUsage())
-      .distinct();
+  private static @NotNull JBIterable<Usage> selectedUsages(@NotNull JBIterable<@NotNull TreeNode> selectedNodes) {
+    return selectedNodes
+      .filter(UsageNode.class)
+      .map(node -> node.getUsage())
+      .unique();
   }
 
   private final class ButtonPanel extends JPanel {

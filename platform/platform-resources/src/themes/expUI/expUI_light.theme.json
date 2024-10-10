@@ -149,6 +149,11 @@
       "hoverSeparatorColor": "Gray8"
     },
 
+    "Badge": {
+      "greenOutlineForeground": "Green4",
+      "greenOutlineBorderColor": "Green6"
+    },
+
     "Bookmark": {
       "Mnemonic.iconForeground": "Gray1",
       "MnemonicAvailable.borderColor": "Gray9",
@@ -1059,6 +1064,35 @@
       "LiveChart": {
         "horizontalAxisColor": "Gray9"
       }
+    },
+    "CompilationCharts": {
+      "background":{
+        "odd": "Gray13",
+        "even": "Gray12",
+        "default": "Gray13"
+      },
+      "test": {
+        "enabled": "Green7",
+        "disabled": "Green10",
+        "stroke": "Green5",
+        "selected": "Green6"
+      },
+      "production": {
+        "enabled": "Blue8",
+        "disabled": "Blue11",
+        "stroke": "Blue4",
+        "selected": "Blue5"
+      },
+      "memory": {
+        "background": "Blue10",
+        "stroke": "Blue5"
+      },
+      "cpu": {
+        "background": "Green9",
+        "stroke": "Green7"
+      },
+      "lineColor": "Gray12",
+      "textColor": "Gray2"
     },
     "FlameGraph.Tooltip": {
       "scaleBackground": "#EBECF0",

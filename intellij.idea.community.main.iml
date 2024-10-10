@@ -43,8 +43,6 @@
     <orderEntry type="module" module-name="intellij.platform.ide" scope="RUNTIME" />
     <orderEntry type="module" module-name="intellij.platform.ide.impl" scope="RUNTIME" />
     <orderEntry type="module" module-name="intellij.platform.starter" scope="RUNTIME" />
-    <orderEntry type="module" module-name="intellij.platform.resources" scope="RUNTIME" />
-    <orderEntry type="module" module-name="intellij.platform.resources.en" scope="RUNTIME" />
     <orderEntry type="module" module-name="intellij.properties" scope="RUNTIME" />
     <orderEntry type="module" module-name="intellij.java.ide.resources" scope="RUNTIME" />
     <orderEntry type="module" module-name="intellij.java.ide.customization" exported="" scope="RUNTIME" />
@@ -210,6 +208,7 @@
     <orderEntry type="module" module-name="intellij.lombok" scope="TEST" />
     <orderEntry type="module" module-name="intellij.xml.xmlbeans" scope="TEST" />
     <orderEntry type="module" module-name="intellij.jsonpath" scope="TEST" />
+    <orderEntry type="module" module-name="intellij.java.guiForms.jps.tests" scope="TEST" />
     <orderEntry type="module" module-name="intellij.platform.ide.newUiOnboarding" scope="RUNTIME" />
     <orderEntry type="module" module-name="intellij.platform.ide.newUsersOnboarding" scope="RUNTIME" />
     <orderEntry type="module" module-name="intellij.kotlin.onboarding-promoter" scope="RUNTIME" />
@@ -222,5 +221,9 @@
     <orderEntry type="module" module-name="intellij.platform.whatsNew" scope="TEST" />
     <orderEntry type="module" module-name="intellij.java.compiler.charts" scope="RUNTIME" />
     <orderEntry type="module" module-name="intellij.platform.compose" scope="RUNTIME" />
+    <orderEntry type="module" module-name="intellij.json.split" scope="RUNTIME" />
+    <orderEntry type="module" module-name="intellij.java.terminal.tests" scope="RUNTIME" />
+    <orderEntry type="module" module-name="intellij.java.terminal" scope="RUNTIME" />
+    <orderEntry type="module" module-name="intellij.remoteDev.util" scope="TEST" />
   </component>
 </module>

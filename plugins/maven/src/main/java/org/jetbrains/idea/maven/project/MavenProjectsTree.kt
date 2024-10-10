@@ -30,7 +30,6 @@ import org.jetbrains.annotations.TestOnly
 import org.jetbrains.idea.maven.dom.references.MavenFilteredPropertyPsiReferenceProvider
 import org.jetbrains.idea.maven.model.*
 import org.jetbrains.idea.maven.project.MavenProjectsTreeUpdater.UpdateSpec
-import org.jetbrains.idea.maven.server.NativeMavenProjectHolder
 import org.jetbrains.idea.maven.utils.*
 import java.io.*
 import java.nio.file.Files
@@ -41,7 +40,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.function.Consumer
 import java.util.regex.Pattern
 import java.util.zip.CRC32
-import kotlin.concurrent.Volatile
+import kotlin.Throws
 
 class MavenProjectsTree(val project: Project) {
   private val myStructureLock = ReentrantReadWriteLock()
@@ -883,10 +882,9 @@ class MavenProjectsTree(val project: Project) {
     }
   }
 
-  fun fireProjectResolved(projectWithChanges: Pair<MavenProject, MavenProjectChanges>,
-                          nativeMavenProject: NativeMavenProjectHolder?) {
+  fun fireProjectResolved(projectWithChanges: Pair<MavenProject, MavenProjectChanges>) {
     for (each in myListeners) {
-      each.projectResolved(projectWithChanges, nativeMavenProject)
+      each.projectResolved(projectWithChanges)
     }
   }
 
@@ -920,8 +918,15 @@ class MavenProjectsTree(val project: Project) {
     fun projectsUpdated(updated: List<Pair<MavenProject, MavenProjectChanges>>, deleted: List<MavenProject>) {
     }
 
+    @Suppress("DEPRECATION")
+    @Deprecated("use projectResolved(Pair<MavenProject, MavenProjectChanges>)")
     fun projectResolved(projectWithChanges: Pair<MavenProject, MavenProjectChanges>,
-                        nativeMavenProject: NativeMavenProjectHolder?) {
+                        nativeMavenProject: org.jetbrains.idea.maven.server.NativeMavenProjectHolder?) {
+    }
+
+    @Suppress("DEPRECATION")
+    fun projectResolved(projectWithChanges: Pair<MavenProject, MavenProjectChanges>) {
+      projectResolved(projectWithChanges, null)
     }
 
     fun pluginsResolved(project: MavenProject) {
@@ -1058,10 +1063,11 @@ class MavenProjectsTree(val project: Project) {
   companion object {
     private val LOG = Logger.getInstance(MavenProjectsTree::class.java)
 
-    private val STORAGE_VERSION = MavenProjectsTree::class.java.simpleName + ".9"
+    private val STORAGE_VERSION = MavenProjectsTree::class.java.simpleName + ".10"
 
     @JvmStatic
     @Throws(IOException::class)
+    @ApiStatus.Internal
     fun read(project: Project, file: Path): MavenProjectsTree? {
       val result = MavenProjectsTree(project)
 

@@ -409,7 +409,7 @@ class IdeaPluginDescriptorImpl(
         plugin = this,
         detailedMessageSupplier = { CoreBundle.message("plugin.loading.error.long.kotlin.incompatible", getName(), mode) },
         shortMessageSupplier = { CoreBundle.message("plugin.loading.error.short.kotlin.incompatible", mode) },
-        isNotifyUser = true,
+        isNotifyUser = false,
       ))
       return
     }
@@ -517,12 +517,24 @@ class IdeaPluginDescriptorImpl(
                                    nameToPoint: Map<String, ExtensionPointImpl<*>>,
                                    listenerCallbacks: MutableList<in Runnable>?): Int {
     var registeredCount = 0
-    for (entry in map) {
-      val point = nameToPoint.get(entry.key) ?: continue
-      point.registerExtensions(descriptors = entry.value, pluginDescriptor = this, listenerCallbacks = listenerCallbacks)
+    for ((descriptors, point) in intersectMaps(map, nameToPoint)) {
+      point.registerExtensions(descriptors = descriptors, pluginDescriptor = this, listenerCallbacks = listenerCallbacks)
       registeredCount++
     }
     return registeredCount
+  }
+
+  private fun <K, V1, V2> intersectMaps(first: Map<K, V1>, second: Map<K, V2>): List<Pair<V1, V2>> {
+    // Make sure we iterate the smaller map
+    if (first.size < second.size) {
+      return first.mapNotNull { (key, firstValue) ->
+        second[key]?.let { secondValue -> firstValue to secondValue }
+      }
+    } else {
+      return second.mapNotNull { (key, secondValue) ->
+        first[key]?.let { firstValue -> firstValue to secondValue }
+      }
+    }
   }
 
   @Suppress("HardCodedStringLiteral")

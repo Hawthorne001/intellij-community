@@ -37,6 +37,7 @@ import org.jetbrains.kotlin.builtins.StandardNames
 import org.jetbrains.kotlin.cli.common.arguments.CommonCompilerArguments
 import org.jetbrains.kotlin.config.KotlinFacetSettingsProvider
 import org.jetbrains.kotlin.idea.KotlinFileType
+import org.jetbrains.kotlin.idea.base.facet.isMultiPlatformModule
 import org.jetbrains.kotlin.idea.base.facet.platform.platform
 import org.jetbrains.kotlin.idea.base.indices.KotlinPackageIndexUtils
 import org.jetbrains.kotlin.idea.base.platforms.*
@@ -103,10 +104,19 @@ const val KOTLIN_GROUP_ID = "org.jetbrains.kotlin"
 fun isRepositoryConfigured(repositoriesBlockText: String): Boolean =
     repositoriesBlockText.contains(MAVEN_CENTRAL) || repositoriesBlockText.contains(JCENTER)
 
+@Deprecated("Use 'toGradleCompileScope(Module) instead")
 fun DependencyScope.toGradleCompileScope(isAndroidModule: Boolean) = when (this) {
     DependencyScope.COMPILE -> "implementation"
     // TODO: We should add testCompile or androidTestCompile
     DependencyScope.TEST -> if (isAndroidModule) "implementation" else "testImplementation"
+    DependencyScope.RUNTIME -> "runtime"
+    DependencyScope.PROVIDED -> "implementation"
+    else -> "implementation"
+}
+
+fun DependencyScope.toGradleCompileScope(targetModule: Module? = null) = when (this) {
+    DependencyScope.COMPILE -> "implementation"
+    DependencyScope.TEST -> if (targetModule?.isMultiPlatformModule == true) "implementation" else "testImplementation"
     DependencyScope.RUNTIME -> "runtime"
     DependencyScope.PROVIDED -> "implementation"
     else -> "implementation"
@@ -265,7 +275,11 @@ fun getCanBeConfiguredModules(project: Project, configurator: KotlinProjectConfi
 
 private fun KotlinProjectConfigurator.canConfigure(moduleSourceRootGroup: ModuleSourceRootGroup) =
     getStatus(moduleSourceRootGroup) == ConfigureKotlinStatus.CAN_BE_CONFIGURED &&
-            (allConfigurators().toList() - this).none { it.getStatus(moduleSourceRootGroup) == ConfigureKotlinStatus.CONFIGURED }
+            (allConfigurators().toList() - this).none {
+                it.isApplicable(moduleSourceRootGroup.baseModule) && it.getStatus(
+                    moduleSourceRootGroup
+                ) == ConfigureKotlinStatus.CONFIGURED
+            }
 
 fun getConfiguredModules(project: Project, configurator: KotlinProjectConfigurator): Map<String, Module> {
     val projectModules = project.modules.asList()
@@ -467,6 +481,7 @@ private const val GROUP_WITH_KOTLIN_VERSION = 2
 typealias ModulesNamesAndFirstSourceRootModules = Map<String, Module>
 typealias KotlinVersionsAndModules = Map<String, ModulesNamesAndFirstSourceRootModules>
 
+@Deprecated("Use org.jetbrains.kotlin.idea.gradleJava.kotlinGradlePluginVersion instead")
 fun Module.getGradleKotlinVersion(): String? {
     return getKotlinCompilerArguments(this)?.pluginClasspaths?.let { pluginsClasspaths ->
         pluginsClasspaths.firstOrNull { it.contains(ARTIFACT_NAME) }?.let {

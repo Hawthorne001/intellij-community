@@ -91,6 +91,10 @@
     <extensionPoint qualifiedName="org.jetbrains.kotlin.libraryVersionProvider"
                     interface="org.jetbrains.kotlin.idea.configuration.KotlinLibraryVersionProvider"
                     dynamic="true"/>
+
+    <extensionPoint qualifiedName="org.jetbrains.kotlin.bundledFirCompilerPluginProvider"
+                    interface="org.jetbrains.kotlin.idea.fir.extensions.KotlinBundledFirCompilerPluginProvider"
+                    dynamic="true"/>
   </extensionPoints>
 
   <extensions defaultExtensionNs="com.intellij">
@@ -563,6 +567,11 @@
       <bundleName>messages.KotlinBundle</bundleName>
       <categoryKey>group.names.kotlin</categoryKey>
     </intentionAction>
+  </extensions>
+
+  <!-- Copy-paste -->
+  <extensions defaultExtensionNs="com.intellij">
+    <filePasteProvider implementation="org.jetbrains.kotlin.idea.codeInsight.copyPaste.KotlinFilePasteProvider" order="first"/>
   </extensions>
 
   <actions>

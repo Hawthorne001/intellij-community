@@ -2582,6 +2582,11 @@ public abstract class K2IntentionTestGenerated extends AbstractK2IntentionTest {
             runTest("../../../idea/tests/testData/intentions/convertStringTemplateToBuildString/inAnnotation.kt");
         }
 
+        @TestMetadata("KTIJ-30269.kt")
+        public void testKTIJ_30269() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertStringTemplateToBuildString/KTIJ-30269.kt");
+        }
+
         @TestMetadata("raw.kt")
         public void testRaw() throws Exception {
             runTest("../../../idea/tests/testData/intentions/convertStringTemplateToBuildString/raw.kt");
@@ -2964,6 +2969,11 @@ public abstract class K2IntentionTestGenerated extends AbstractK2IntentionTest {
             runTest("../../../idea/tests/testData/intentions/convertToConcatenatedString/interpolateStringWithInt.kt");
         }
 
+        @TestMetadata("KTIJ-30269.kt")
+        public void testKTIJ_30269() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToConcatenatedString/KTIJ-30269.kt");
+        }
+
         @TestMetadata("lastExprIsNamedExpression.kt")
         public void testLastExprIsNamedExpression() throws Exception {
             runTest("../../../idea/tests/testData/intentions/convertToConcatenatedString/lastExprIsNamedExpression.kt");
@@ -3198,14 +3208,19 @@ public abstract class K2IntentionTestGenerated extends AbstractK2IntentionTest {
             runTest("../../../idea/tests/testData/intentions/convertToStringTemplate/invalidChar.kt");
         }
 
-        @TestMetadata("kt11295.kt")
-        public void testKt11295() throws Exception {
-            runTest("../../../idea/tests/testData/intentions/convertToStringTemplate/kt11295.kt");
+        @TestMetadata("KTIJ-30491.kt")
+        public void testKTIJ_30491() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToStringTemplate/KTIJ-30491.kt");
         }
 
-        @TestMetadata("ktij30491.kt")
-        public void testKtij30491() throws Exception {
-            runTest("../../../idea/tests/testData/intentions/convertToStringTemplate/ktij30491.kt");
+        @TestMetadata("KTIJ-30491-2.kt")
+        public void testKTIJ_30491_2() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToStringTemplate/KTIJ-30491-2.kt");
+        }
+
+        @TestMetadata("KT-11295.kt")
+        public void testKT_11295() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToStringTemplate/KT-11295.kt");
         }
 
         @TestMetadata("lambdaInParentheses.kt")
@@ -4137,11 +4152,6 @@ public abstract class K2IntentionTestGenerated extends AbstractK2IntentionTest {
         @TestMetadata("inapplicableTypeCanNotBeinferred3.kt")
         public void testInapplicableTypeCanNotBeinferred3() throws Exception {
             runTest("../../../idea/tests/testData/intentions/replaceUnderscoreWithTypeArgument/inapplicableTypeCanNotBeinferred3.kt");
-        }
-
-        @TestMetadata("inapplicableTypeCanNotBeinferred4.kt")
-        public void testInapplicableTypeCanNotBeinferred4() throws Exception {
-            runTest("../../../idea/tests/testData/intentions/replaceUnderscoreWithTypeArgument/inapplicableTypeCanNotBeinferred4.kt");
         }
 
         @TestMetadata("inferredTypeFromElvis.kt")
@@ -6258,6 +6268,11 @@ public abstract class K2IntentionTestGenerated extends AbstractK2IntentionTest {
             runTest("../../../idea/tests/testData/intentions/removeExplicitTypeArguments/insideOtherCall.kt");
         }
 
+        @TestMetadata("KTIJ-31286.kt")
+        public void testKTIJ_31286() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/removeExplicitTypeArguments/KTIJ-31286.kt");
+        }
+
         @TestMetadata("kt29735.kt")
         public void testKt29735() throws Exception {
             runTest("../../../idea/tests/testData/intentions/removeExplicitTypeArguments/kt29735.kt");
@@ -7469,7 +7484,284 @@ public abstract class K2IntentionTestGenerated extends AbstractK2IntentionTest {
 
 
 
+    @RunWith(JUnit3RunnerWithInners.class)
+    @TestMetadata("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension")
+    public static class ConvertMemberToExtension extends AbstractK2IntentionTest {
+        @java.lang.Override
+        @org.jetbrains.annotations.NotNull
+        public final KotlinPluginMode getPluginMode() {
+            return KotlinPluginMode.K2;
+        }
 
+        private void runTest(String testDataFilePath) throws Exception {
+            KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
+        }
+
+        @TestMetadata("abstract.kt")
+        public void testAbstract() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/abstract.kt");
+        }
+
+        @TestMetadata("abstractProperty.kt")
+        public void testAbstractProperty() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/abstractProperty.kt");
+        }
+
+        @TestMetadata("delegatedProperty.kt")
+        public void testDelegatedProperty() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/delegatedProperty.kt");
+        }
+
+        @TestMetadata("explicitUnit.kt")
+        public void testExplicitUnit() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/explicitUnit.kt");
+        }
+
+        @TestMetadata("extension.kt")
+        public void testExtension() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/extension.kt");
+        }
+
+        @TestMetadata("final.kt")
+        public void testFinal() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/final.kt");
+        }
+
+        @TestMetadata("funInterface.kt")
+        public void testFunInterface() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/funInterface.kt");
+        }
+
+        @TestMetadata("funInterface2.kt")
+        public void testFunInterface2() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/funInterface2.kt");
+        }
+
+        @TestMetadata("funcitonNoName.kt")
+        public void testFuncitonNoName() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/funcitonNoName.kt");
+        }
+
+        @TestMetadata("functionType.kt")
+        public void testFunctionType() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/functionType.kt");
+        }
+
+        @TestMetadata("genericClass.kt")
+        public void testGenericClass() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/genericClass.kt");
+        }
+
+        @TestMetadata("genericClassWithInVariance.kt")
+        public void testGenericClassWithInVariance() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/genericClassWithInVariance.kt");
+        }
+
+        @TestMetadata("genericClassWithOutVariance.kt")
+        public void testGenericClassWithOutVariance() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/genericClassWithOutVariance.kt");
+        }
+
+        @TestMetadata("genericClassWithVarianceAndReified.kt")
+        public void testGenericClassWithVarianceAndReified() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/genericClassWithVarianceAndReified.kt");
+        }
+
+        @TestMetadata("genericFun.kt")
+        public void testGenericFun() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/genericFun.kt");
+        }
+
+        @TestMetadata("genericFunInGenericClass.kt")
+        public void testGenericFunInGenericClass() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/genericFunInGenericClass.kt");
+        }
+
+        @TestMetadata("genericFunInGenericClassWithUpperBounds.kt")
+        public void testGenericFunInGenericClassWithUpperBounds() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/genericFunInGenericClassWithUpperBounds.kt");
+        }
+
+        @TestMetadata("genericFunParamAfterName.kt")
+        public void testGenericFunParamAfterName() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/genericFunParamAfterName.kt");
+        }
+
+        @TestMetadata("inCompanionObject.kt")
+        public void testInCompanionObject() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/inCompanionObject.kt");
+        }
+
+        @TestMetadata("inFunctionBody.kt")
+        public void testInFunctionBody() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/inFunctionBody.kt");
+        }
+
+        @TestMetadata("inLocalClass.kt")
+        public void testInLocalClass() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/inLocalClass.kt");
+        }
+
+        @TestMetadata("inObject.kt")
+        public void testInObject() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/inObject.kt");
+        }
+
+        @TestMetadata("inObjectLiteral.kt")
+        public void testInObjectLiteral() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/inObjectLiteral.kt");
+        }
+
+        @TestMetadata("internal.kt")
+        public void testInternal() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/internal.kt");
+        }
+
+        @TestMetadata("KDoc.kt")
+        public void testKDoc() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/KDoc.kt");
+        }
+
+        @TestMetadata("localFunction.kt")
+        public void testLocalFunction() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/localFunction.kt");
+        }
+
+        @TestMetadata("nonBlockBodyNoType.kt")
+        public void testNonBlockBodyNoType() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/nonBlockBodyNoType.kt");
+        }
+
+        @TestMetadata("nonBlockBodyWithType.kt")
+        public void testNonBlockBodyWithType() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/nonBlockBodyWithType.kt");
+        }
+
+        @TestMetadata("open.kt")
+        public void testOpen() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/open.kt");
+        }
+
+        @TestMetadata("outsideFunction.kt")
+        public void testOutsideFunction() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/outsideFunction.kt");
+        }
+
+        @TestMetadata("override.kt")
+        public void testOverride() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/override.kt");
+        }
+
+        @TestMetadata("private.kt")
+        public void testPrivate() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/private.kt");
+        }
+
+        @TestMetadata("privateInInternalClass.kt")
+        public void testPrivateInInternalClass() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/privateInInternalClass.kt");
+        }
+
+        @TestMetadata("protected.kt")
+        public void testProtected() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/protected.kt");
+        }
+
+        @TestMetadata("public.kt")
+        public void testPublic() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/public.kt");
+        }
+
+        @TestMetadata("publicInInternalClass.kt")
+        public void testPublicInInternalClass() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/publicInInternalClass.kt");
+        }
+
+        @TestMetadata("publicInPrivateClass.kt")
+        public void testPublicInPrivateClass() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/publicInPrivateClass.kt");
+        }
+
+        @TestMetadata("secondaryConstructor.kt")
+        public void testSecondaryConstructor() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/secondaryConstructor.kt");
+        }
+
+        @TestMetadata("simple.kt")
+        public void testSimple() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/simple.kt");
+        }
+
+        @TestMetadata("topLevelFunction.kt")
+        public void testTopLevelFunction() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/topLevelFunction.kt");
+        }
+
+        @TestMetadata("typeFqName.kt")
+        public void testTypeFqName() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/typeFqName.kt");
+        }
+
+        @TestMetadata("unknownType.kt")
+        public void testUnknownType() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/unknownType.kt");
+        }
+
+        @TestMetadata("valWithDefaultGetter.kt")
+        public void testValWithDefaultGetter() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/valWithDefaultGetter.kt");
+        }
+
+        @TestMetadata("valWithGetter.kt")
+        public void testValWithGetter() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/valWithGetter.kt");
+        }
+
+        @TestMetadata("valWithGetterBlockBody.kt")
+        public void testValWithGetterBlockBody() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/valWithGetterBlockBody.kt");
+        }
+
+        @TestMetadata("varWithDefaultGetterAndSetter.kt")
+        public void testVarWithDefaultGetterAndSetter() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/varWithDefaultGetterAndSetter.kt");
+        }
+
+        @TestMetadata("varWithDefaultSetter.kt")
+        public void testVarWithDefaultSetter() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/varWithDefaultSetter.kt");
+        }
+
+        @TestMetadata("varWithGetter.kt")
+        public void testVarWithGetter() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/varWithGetter.kt");
+        }
+
+        @TestMetadata("varWithGetterAndSetter.kt")
+        public void testVarWithGetterAndSetter() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/varWithGetterAndSetter.kt");
+        }
+
+        @TestMetadata("varWithSetter.kt")
+        public void testVarWithSetter() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/varWithSetter.kt");
+        }
+
+        @TestMetadata("withImport.kt")
+        public void testWithImport() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/withImport.kt");
+        }
+
+        @TestMetadata("withJavaUsage.kt")
+        public void testWithJavaUsage() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/withJavaUsage.kt");
+        }
+
+        @TestMetadata("withType.kt")
+        public void testWithType() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/declarations/convertMemberToExtension/withType.kt");
+        }
+    }
 
 
 
@@ -9169,6 +9461,260 @@ public abstract class K2IntentionTestGenerated extends AbstractK2IntentionTest {
         }
     }
 
+    @RunWith(JUnit3RunnerWithInners.class)
+    @TestMetadata("../../../idea/tests/testData/intentions/convertToMultiDollarString")
+    public static class ConvertToMultiDollarString extends AbstractK2IntentionTest {
+        @java.lang.Override
+        @org.jetbrains.annotations.NotNull
+        public final KotlinPluginMode getPluginMode() {
+            return KotlinPluginMode.K2;
+        }
+
+        private void runTest(String testDataFilePath) throws Exception {
+            KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
+        }
+
+        @TestMetadata("clashSafe1.kt")
+        public void testClashSafe1() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashSafe1.kt");
+        }
+
+        @TestMetadata("clashSafe2.kt")
+        public void testClashSafe2() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashSafe2.kt");
+        }
+
+        @TestMetadata("clashSafe3.kt")
+        public void testClashSafe3() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashSafe3.kt");
+        }
+
+        @TestMetadata("clashSafe4.kt")
+        public void testClashSafe4() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashSafe4.kt");
+        }
+
+        @TestMetadata("clashSafe5.kt")
+        public void testClashSafe5() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashSafe5.kt");
+        }
+
+        @TestMetadata("clashSafe6.kt")
+        public void testClashSafe6() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashSafe6.kt");
+        }
+
+        @TestMetadata("clashSafe7.kt")
+        public void testClashSafe7() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashSafe7.kt");
+        }
+
+        @TestMetadata("clashSafe8.kt")
+        public void testClashSafe8() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashSafe8.kt");
+        }
+
+        @TestMetadata("clashSafeSpaceBeforeCurlyBrace.kt")
+        public void testClashSafeSpaceBeforeCurlyBrace() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashSafeSpaceBeforeCurlyBrace.kt");
+        }
+
+        @TestMetadata("clashUnsafeBlockExpression.kt")
+        public void testClashUnsafeBlockExpression() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashUnsafeBlockExpression.kt");
+        }
+
+        @TestMetadata("clashUnsafeBlockExpressionMultiline.kt")
+        public void testClashUnsafeBlockExpressionMultiline() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashUnsafeBlockExpressionMultiline.kt");
+        }
+
+        @TestMetadata("clashUnsafeBlockExpressionSlashEscaping.kt")
+        public void testClashUnsafeBlockExpressionSlashEscaping() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashUnsafeBlockExpressionSlashEscaping.kt");
+        }
+
+        @TestMetadata("clashUnsafeEscapedIdentifier.kt")
+        public void testClashUnsafeEscapedIdentifier() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashUnsafeEscapedIdentifier.kt");
+        }
+
+        @TestMetadata("clashUnsafeEscapedIdentifierMultiline.kt")
+        public void testClashUnsafeEscapedIdentifierMultiline() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashUnsafeEscapedIdentifierMultiline.kt");
+        }
+
+        @TestMetadata("clashUnsafeLetterIdentifier.kt")
+        public void testClashUnsafeLetterIdentifier() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashUnsafeLetterIdentifier.kt");
+        }
+
+        @TestMetadata("clashUnsafeLetterIdentifierInterpolated.kt")
+        public void testClashUnsafeLetterIdentifierInterpolated() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashUnsafeLetterIdentifierInterpolated.kt");
+        }
+
+        @TestMetadata("clashUnsafeMultilineBackticksNested.kt")
+        public void testClashUnsafeMultilineBackticksNested() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashUnsafeMultilineBackticksNested.kt");
+        }
+
+        @TestMetadata("clashUnsafeMultipleBlocksBeforeIdentifier.kt")
+        public void testClashUnsafeMultipleBlocksBeforeIdentifier() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashUnsafeMultipleBlocksBeforeIdentifier.kt");
+        }
+
+        @TestMetadata("clashUnsafeUnderscoreIdentifier.kt")
+        public void testClashUnsafeUnderscoreIdentifier() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashUnsafeUnderscoreIdentifier.kt");
+        }
+
+        @TestMetadata("clashUnsafeUnpairedCurlyBrace.kt")
+        public void testClashUnsafeUnpairedCurlyBrace() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/clashUnsafeUnpairedCurlyBrace.kt");
+        }
+
+        @TestMetadata("escapedSingleLine.kt")
+        public void testEscapedSingleLine() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/escapedSingleLine.kt");
+        }
+
+        @TestMetadata("incompleteCode.kt")
+        public void testIncompleteCode() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/incompleteCode.kt");
+        }
+
+        @TestMetadata("literalEndsWithDollars.kt")
+        public void testLiteralEndsWithDollars() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/literalEndsWithDollars.kt");
+        }
+
+        @TestMetadata("multilineString.kt")
+        public void testMultilineString() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/multilineString.kt");
+        }
+
+        @TestMetadata("multilineStringNestedDollarChars.kt")
+        public void testMultilineStringNestedDollarChars() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/multilineStringNestedDollarChars.kt");
+        }
+
+        @TestMetadata("multilineStringNoReplacement.kt")
+        public void testMultilineStringNoReplacement() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/multilineStringNoReplacement.kt");
+        }
+
+        @TestMetadata("nameWithDoubleDollarInBackticks.kt")
+        public void testNameWithDoubleDollarInBackticks() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/nameWithDoubleDollarInBackticks.kt");
+        }
+
+        @TestMetadata("nestedInterpolationInner.kt")
+        public void testNestedInterpolationInner() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/nestedInterpolationInner.kt");
+        }
+
+        @TestMetadata("nestedInterpolationIntermediate.kt")
+        public void testNestedInterpolationIntermediate() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/nestedInterpolationIntermediate.kt");
+        }
+
+        @TestMetadata("nestedInterpolationOuter.kt")
+        public void testNestedInterpolationOuter() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/nestedInterpolationOuter.kt");
+        }
+
+        @TestMetadata("noReplacement.kt")
+        public void testNoReplacement() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/noReplacement.kt");
+        }
+
+        @TestMetadata("noReplacementMultiline.kt")
+        public void testNoReplacementMultiline() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/noReplacementMultiline.kt");
+        }
+
+        @TestMetadata("plainString.kt")
+        public void testPlainString() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/plainString.kt");
+        }
+
+        @TestMetadata("rawStringOnSingleLine.kt")
+        public void testRawStringOnSingleLine() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/rawStringOnSingleLine.kt");
+        }
+
+        @TestMetadata("replaceNestedDollarChars.kt")
+        public void testReplaceNestedDollarChars() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/replaceNestedDollarChars.kt");
+        }
+
+        @TestMetadata("replaceSingleNestedDollarChar.kt")
+        public void testReplaceSingleNestedDollarChar() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/replaceSingleNestedDollarChar.kt");
+        }
+
+        @TestMetadata("replaceSingleNestedDollarString.kt")
+        public void testReplaceSingleNestedDollarString() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/replaceSingleNestedDollarString.kt");
+        }
+
+        @TestMetadata("replaceWithFallbackToPrefixLength2.kt")
+        public void testReplaceWithFallbackToPrefixLength2() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/replaceWithFallbackToPrefixLength2.kt");
+        }
+
+        @TestMetadata("replaceWithFallbackToPrefixLength2MixedEscaping.kt")
+        public void testReplaceWithFallbackToPrefixLength2MixedEscaping() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/replaceWithFallbackToPrefixLength2MixedEscaping.kt");
+        }
+
+        @TestMetadata("replaceWithFallbackToPrefixLength2Multiline.kt")
+        public void testReplaceWithFallbackToPrefixLength2Multiline() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/replaceWithFallbackToPrefixLength2Multiline.kt");
+        }
+
+        @TestMetadata("replaceWithPrefixLength4.kt")
+        public void testReplaceWithPrefixLength4() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/replaceWithPrefixLength4.kt");
+        }
+
+        @TestMetadata("replaceWithPrefixLength4MixedEscaping.kt")
+        public void testReplaceWithPrefixLength4MixedEscaping() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/replaceWithPrefixLength4MixedEscaping.kt");
+        }
+
+        @TestMetadata("replaceWithPrefixLength4Multiline.kt")
+        public void testReplaceWithPrefixLength4Multiline() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/replaceWithPrefixLength4Multiline.kt");
+        }
+
+        @TestMetadata("replaceWithPrefixLength5.kt")
+        public void testReplaceWithPrefixLength5() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/replaceWithPrefixLength5.kt");
+        }
+
+        @TestMetadata("replaceWithPrefixLength5MixedEscaping.kt")
+        public void testReplaceWithPrefixLength5MixedEscaping() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/replaceWithPrefixLength5MixedEscaping.kt");
+        }
+
+        @TestMetadata("replaceWithPrefixLength5Multiline.kt")
+        public void testReplaceWithPrefixLength5Multiline() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/replaceWithPrefixLength5Multiline.kt");
+        }
+
+        @TestMetadata("sqlDoubleDollar.kt")
+        public void testSqlDoubleDollar() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/sqlDoubleDollar.kt");
+        }
+
+        @TestMetadata("withInterpolatedExpressions.kt")
+        public void testWithInterpolatedExpressions() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/convertToMultiDollarString/withInterpolatedExpressions.kt");
+        }
+    }
+
 
 
     @RunWith(JUnit3RunnerWithInners.class)
@@ -10379,7 +10925,79 @@ public abstract class K2IntentionTestGenerated extends AbstractK2IntentionTest {
 
 
 
+    @RunWith(JUnit3RunnerWithInners.class)
+    @TestMetadata("../../../idea/tests/testData/intentions/addValOrVar")
+    public static class AddValOrVar extends AbstractK2IntentionTest {
+        @java.lang.Override
+        @org.jetbrains.annotations.NotNull
+        public final KotlinPluginMode getPluginMode() {
+            return KotlinPluginMode.K2;
+        }
 
+        private void runTest(String testDataFilePath) throws Exception {
+            KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
+        }
+
+        @TestMetadata("actualClass.kt")
+        public void testActualClass() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addValOrVar/actualClass.kt");
+        }
+
+        @TestMetadata("addVal.kt")
+        public void testAddVal() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addValOrVar/addVal.kt");
+        }
+
+        @TestMetadata("dataClass.kt")
+        public void testDataClass() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addValOrVar/dataClass.kt");
+        }
+
+        @TestMetadata("expectAnnotation.kt")
+        public void testExpectAnnotation() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addValOrVar/expectAnnotation.kt");
+        }
+
+        @TestMetadata("expectClass.kt")
+        public void testExpectClass() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addValOrVar/expectClass.kt");
+        }
+
+        @TestMetadata("expectClass2.kt")
+        public void testExpectClass2() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addValOrVar/expectClass2.kt");
+        }
+
+        @TestMetadata("expectInlineClass.kt")
+        public void testExpectInlineClass() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addValOrVar/expectInlineClass.kt");
+        }
+
+        @TestMetadata("funParameter.kt")
+        public void testFunParameter() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addValOrVar/funParameter.kt");
+        }
+
+        @TestMetadata("hasVal.kt")
+        public void testHasVal() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addValOrVar/hasVal.kt");
+        }
+
+        @TestMetadata("hasVar.kt")
+        public void testHasVar() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addValOrVar/hasVar.kt");
+        }
+
+        @TestMetadata("outOfRange.kt")
+        public void testOutOfRange() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addValOrVar/outOfRange.kt");
+        }
+
+        @TestMetadata("secondaryConstructorParameter.kt")
+        public void testSecondaryConstructorParameter() throws Exception {
+            runTest("../../../idea/tests/testData/intentions/addValOrVar/secondaryConstructorParameter.kt");
+        }
+    }
 
 
 

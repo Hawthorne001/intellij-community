@@ -42,6 +42,7 @@ private const val defaultXPointerValue = "xpointer(/idea-plugin/*)"
 /**
  * Do not use [java.io.BufferedInputStream] - buffer is used internally already.
  */
+@ApiStatus.Internal
 fun readModuleDescriptor(
   input: InputStream,
   readContext: ReadModuleContext,
@@ -61,6 +62,7 @@ fun readModuleDescriptor(
   )
 }
 
+@ApiStatus.Internal
 fun readModuleDescriptor(
   input: ByteArray,
   readContext: ReadModuleContext,
@@ -192,6 +194,7 @@ private val K2_ALLOWED_PLUGIN_IDS = Java11Shim.INSTANCE.copyOf(KNOWN_KOTLIN_PLUG
   "org.jetbrains.plugins.kotlin.jupyter",
   "com.intellij.kmm",
   "com.jetbrains.kotlin.ocswift",
+  "kotlin.gradle.gradle-java"
 ))
 
 private fun readRootElementChild(
@@ -865,6 +868,7 @@ private fun getNullifiedContent(reader: XMLStreamReader2): String? = reader.elem
 
 private fun getNullifiedAttributeValue(reader: XMLStreamReader2, i: Int) = reader.getAttributeValue(i).trim().takeIf { !it.isEmpty() }
 
+@ApiStatus.Internal
 interface ReadModuleContext {
   val interner: XmlInterner
   val isMissingIncludeIgnored: Boolean

@@ -98,6 +98,7 @@ public abstract class ActionPlaces {
   public static final String SHOW_USAGES_POPUP_TOOLBAR = "ShowUsagesPopupToolbar";
   public static final String STRUCTURE_VIEW_POPUP = "StructureViewPopup";
   public static final String STRUCTURE_VIEW_TOOLBAR = "StructureViewToolbar";
+  public static final String STRUCTURE_VIEW_FLOATING_TOOLBAR = "StructureViewFloatingToolbar";
   public static final String NAVIGATION_BAR_POPUP = "NavBar";
   public static final String NAVIGATION_BAR_TOOLBAR = "NavBarToolbar";
   public static final String RUN_TOOLBAR_LEFT_SIDE = "RunToolbarLeftSide";
@@ -144,6 +145,7 @@ public abstract class ActionPlaces {
 
   public static final String DATABASE_VIEW_TOOLBAR = "DatabaseViewToolbar";
   public static final String DATABASE_VIEW_POPUP = "DatabaseViewPopup";
+  public static final String GRID_FLOATING_PAGING_TOOLBAR = "GridFloatingPagingToolbar";
 
   public static final String REMOTE_HOST_VIEW_POPUP = "RemoteHostPopup";
   public static final String REMOTE_HOST_DIALOG_POPUP = "RemoteHostDialogPopup";

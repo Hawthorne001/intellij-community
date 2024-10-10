@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @SuppressWarnings("NonPrivateFieldAccessedInSynchronizedContext")
 class JBCefNativeOsrHandler extends JBCefOsrHandler implements CefNativeRenderHandler {
   private static final int CLEAN_CACHE_TIME_MS = Integer.getInteger("jcef.remote.osr.clean_cache_time_ms", 10*1000); // 10 sec
-  private static final boolean FORCE_USE_SOFTWARE_RENDERING = Boolean.getBoolean("jcef.remote.force_use_software_rendering");
+  private static final boolean FORCE_USE_SOFTWARE_RENDERING = !Boolean.getBoolean("jcef.remote.enable_hardware_rendering"); // NOTE: temporary enabled until fixed IJPL-161293
 
   private final Map<String, SharedMemory.WithRaster> mySharedMemCache = new ConcurrentHashMap<>();
   private SharedMemory.WithRaster myCurrentFrame;
@@ -114,7 +114,10 @@ class JBCefNativeOsrHandler extends JBCefOsrHandler implements CefNativeRenderHa
   @Override
   protected Dimension getCurrentFrameSize() {
     SharedMemory.WithRaster frame = myCurrentFrame;
-    return frame == null ? null : new Dimension(frame.getWidth(), frame.getHeight());
+    if (frame == null)
+      return null;
+
+    return new Dimension((int)Math.ceil(frame.getWidth()/getPixelDensity()), (int)Math.ceil(frame.getHeight()/getPixelDensity()));
   }
 
   @Override

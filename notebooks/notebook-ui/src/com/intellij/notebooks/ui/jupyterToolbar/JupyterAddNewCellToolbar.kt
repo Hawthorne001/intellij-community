@@ -1,10 +1,10 @@
 package com.intellij.notebooks.ui.jupyterToolbar
 
+import com.intellij.notebooks.ui.SelectClickedCellEventHelper
 import com.intellij.openapi.actionSystem.ActionGroup
 import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.impl.ActionToolbarImpl
 import com.intellij.openapi.actionSystem.toolbarLayout.ToolbarLayoutStrategy
-import com.intellij.openapi.editor.Editor
 import com.intellij.ui.JBColor
 import com.intellij.ui.NewUiValue
 import com.intellij.ui.RoundedLineBorder
@@ -17,11 +17,11 @@ import java.awt.Graphics
 import java.awt.Graphics2D
 import javax.swing.BorderFactory
 import javax.swing.JComponent
-import javax.swing.SwingUtilities
 
 @ApiStatus.Internal
-class JupyterAddNewCellToolbar(  // PY-66455
-  actionGroup: ActionGroup, target: JComponent, place: String = ActionPlaces.EDITOR_INLAY
+class JupyterAddNewCellToolbar(
+  // PY-66455
+  actionGroup: ActionGroup, target: JComponent, place: String = ActionPlaces.EDITOR_INLAY,
 ) : ActionToolbarImpl(place, actionGroup, true) {
   init {
     val borderColor = when (NewUiValue.isEnabled()) {
@@ -33,6 +33,7 @@ class JupyterAddNewCellToolbar(  // PY-66455
     isOpaque = false
     cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
     targetComponent = target
+    putClientProperty(SelectClickedCellEventHelper.SKIP_CLICK_PROCESSING_FOR_CELL_SELECTION, true)
     setSkipWindowAdjustments(false)
   }
 
@@ -54,14 +55,6 @@ class JupyterAddNewCellToolbar(  // PY-66455
       background = JBColor.WHITE
     }
     layoutStrategy = ToolbarLayoutStrategy.NOWRAP_STRATEGY
-  }
-
-  fun getRespectiveLineNumberInEditor(editor: Editor): Int? {
-    val point = SwingUtilities.convertPoint(this, 0, this.height, editor.contentComponent)
-    val documentLineCount = editor.document.lineCount
-    var prospectiveLineNumber = point.y.takeIf { it >= 0 }?.let { editor.xyToLogicalPosition(point).line } ?: return null
-    if (prospectiveLineNumber >= documentLineCount) { prospectiveLineNumber = documentLineCount - 1 }
-    return prospectiveLineNumber
   }
 
   override fun installPopupHandler(customizable: Boolean, popupActionGroup: ActionGroup?, popupActionId: String?) = Unit

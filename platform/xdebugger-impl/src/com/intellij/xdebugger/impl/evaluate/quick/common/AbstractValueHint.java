@@ -41,6 +41,7 @@ import com.intellij.xdebugger.frame.XFullValueEvaluator;
 import com.intellij.xdebugger.frame.XValue;
 import com.intellij.xdebugger.frame.presentation.XValuePresentation;
 import com.intellij.xdebugger.impl.actions.XDebuggerActions;
+import com.intellij.xdebugger.impl.evaluate.ValueLookupManagerController;
 import com.intellij.xdebugger.impl.evaluate.quick.XDebuggerTreeCreator;
 import com.intellij.xdebugger.impl.ui.DebuggerUIUtil;
 import com.intellij.xdebugger.impl.ui.ExecutionPointHighlighter;
@@ -69,7 +70,7 @@ public abstract class AbstractValueHint {
     @Override
     public void keyReleased(KeyEvent e) {
       if (!isAltMask(e.getModifiers())) {
-        ValueLookupManager.getInstance(myProject).hideHint();
+        ValueLookupManagerController.getInstance(myProject).hideHint();
       }
     }
   };
@@ -97,10 +98,6 @@ public abstract class AbstractValueHint {
     myEditor = editor;
     myType = type;
     myCurrentRange = textRange;
-  }
-
-  protected boolean canShowHint() {
-    return true;
   }
 
   protected abstract void evaluateAndShowHint();
@@ -143,7 +140,7 @@ public abstract class AbstractValueHint {
   public void invokeHint(Runnable hideRunnable) {
     myHideRunnable = hideRunnable;
 
-    if (!canShowHint() || !isCurrentRangeValid()) {
+    if (!isCurrentRangeValid()) {
       hideHint();
       return;
     }
@@ -212,7 +209,8 @@ public abstract class AbstractValueHint {
     return myEditor;
   }
 
-  protected ValueHintType getType() {
+  @ApiStatus.Internal
+  public ValueHintType getType() {
     return myType;
   }
 
@@ -230,7 +228,7 @@ public abstract class AbstractValueHint {
 
   private boolean myInsideShow = false; // to avoid invoking myHideRunnable for new popups with updated presentation
 
-  private void processHintHidden() {
+  protected void processHintHidden() {
     if (!myInsideShow) {
       if (myHideRunnable != null) {
         myHideRunnable.run();
@@ -319,7 +317,8 @@ public abstract class AbstractValueHint {
   protected void onHintHidden() {
   }
 
-  protected boolean isHintHidden() {
+  @ApiStatus.Internal
+  public boolean isHintHidden() {
     return myHintHidden;
   }
 
@@ -523,7 +522,8 @@ public abstract class AbstractValueHint {
     return Objects.hash(myProject, myEditor, myType, myCurrentRange);
   }
 
-  void setEditorMouseEvent(EditorMouseEvent editorMouseEvent) {
+  @ApiStatus.Internal
+  public void setEditorMouseEvent(EditorMouseEvent editorMouseEvent) {
     myEditorMouseEvent = editorMouseEvent;
   }
 

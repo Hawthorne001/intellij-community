@@ -27,7 +27,6 @@ import com.intellij.openapi.roots.OrderRootType
 import com.intellij.openapi.roots.libraries.ui.OrderRoot
 import com.intellij.psi.PsiElement
 import com.intellij.testFramework.runInEdtAndWait
-import com.intellij.xdebugger.XDebuggerTestUtil
 import com.intellij.xdebugger.frame.XStackFrame
 import com.intellij.xdebugger.impl.XSourcePositionImpl
 import junit.framework.AssertionFailedError
@@ -52,6 +51,7 @@ import org.jetbrains.kotlin.idea.test.allKotlinFiles
 import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.jetbrains.kotlin.psi.psiUtil.getElementTextWithContext
 import org.jetbrains.kotlin.test.InTextDirectivesUtils
+import org.jetbrains.kotlin.test.TargetBackend
 import org.jetbrains.kotlin.utils.addToStdlib.firstIsInstance
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
@@ -248,7 +248,7 @@ abstract class KotlinDescriptorTestCaseWithStepping : KotlinDescriptorTestCase()
 
     fun isTestIgnored(): Boolean {
         val outputFile = getExpectedOutputFile()
-        return outputFile.exists() && isIgnoredTarget(targetBackend(), outputFile)
+        return outputFile.exists() && isIgnoredTarget(TargetBackend.JVM_IR_WITH_IR_EVALUATOR, outputFile)
     }
 
     override fun areLogErrorsIgnored(): Boolean {
@@ -292,11 +292,8 @@ abstract class KotlinDescriptorTestCaseWithStepping : KotlinDescriptorTestCase()
     }
 
     private fun createSmartStepIntoFilters(): List<MethodFilter> {
-        val position = debuggerContext.sourcePosition
         val stepTargets = KotlinSmartStepIntoHandler()
-            .findStepIntoTargets(position, debuggerSession)
-            .blockingGet(XDebuggerTestUtil.TIMEOUT_MS)
-            ?: error("Couldn't calculate smart step targets")
+            .findSmartStepTargetsSync(debuggerContext.sourcePosition, debuggerSession)
 
         // the resulting order is different from the order in code when stepping some methods are filtered
         // due to de-prioritisation in JvmSmartStepIntoHandler.reorderWithSteppingFilters

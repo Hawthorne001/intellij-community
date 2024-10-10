@@ -28,6 +28,7 @@ import com.intellij.projectImport.ProjectImportProvider;
 import com.intellij.testFramework.HeavyPlatformTestCase;
 import com.intellij.testFramework.IndexingTestUtil;
 import com.intellij.testFramework.PlatformTestUtil;
+import com.intellij.testFramework.TestObservation;
 import com.intellij.util.SystemProperties;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.ui.UIUtil;
@@ -37,6 +38,7 @@ import org.jetbrains.annotations.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -121,10 +123,7 @@ public abstract class ProjectWizardTestCase<T extends AbstractProjectWizard> ext
       throw new RuntimeException(e);
     }
     assertNotNull(myCreatedProject);
-
-    UIUtil.dispatchAllInvocationEvents();
-    IndexingTestUtil.waitUntilIndexesAreReady(myCreatedProject);
-
+    waitForConfiguration(myCreatedProject);
     return myCreatedProject;
   }
 
@@ -133,7 +132,15 @@ public abstract class ProjectWizardTestCase<T extends AbstractProjectWizard> ext
   }
 
   private Module createModuleFromWizard(@NotNull Project project) {
-    return new NewModuleAction().createModuleFromWizard(project, null, myWizard);
+    Module createdModule = new NewModuleAction().createModuleFromWizard(project, null, myWizard);
+    waitForConfiguration(project);
+    return createdModule;
+  }
+
+  protected void waitForConfiguration(@NotNull Project project) {
+    UIUtil.dispatchAllInvocationEvents();
+    IndexingTestUtil.waitUntilIndexesAreReady(project);
+    TestObservation.waitForConfiguration(TimeUnit.MINUTES.toMillis(10), project);
   }
 
   private static void setSelectedTemplate(@NotNull Step step, @NotNull String group, @Nullable String name) {

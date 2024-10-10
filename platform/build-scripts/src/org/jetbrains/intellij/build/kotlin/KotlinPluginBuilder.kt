@@ -188,7 +188,6 @@ object KotlinPluginBuilder {
     "kotlin.highlighting.k2",
     "kotlin.uast.uast-kotlin.k2",
     "kotlin.uast.uast-kotlin-idea.k2",
-    "kotlin.fir.fir-low-level-api-ide-impl",
     "kotlin.navigation",
     "kotlin.refactorings.common",
     "kotlin.refactorings.k2",
@@ -247,6 +246,7 @@ object KotlinPluginBuilder {
     "kotlinc.parcelize-compiler-plugin",
     "kotlinc.lombok-compiler-plugin",
     "kotlinc.compose-compiler-plugin",
+    "kotlinc.js-plain-objects-compiler-plugin",
   )
 
   fun kotlinPlugin(ultimateSources: KotlinUltimateSources, addition: ((PluginLayout.PluginLayoutSpec) -> Unit)? = null): PluginLayout {
@@ -316,7 +316,7 @@ object KotlinPluginBuilder {
       spec.withProjectLibrary("kotlinc.kotlin-jps-plugin-classpath", "jps/kotlin-jps-plugin.jar")
       spec.withProjectLibrary("kotlinc.kotlin-jps-common")
       //noinspection SpellCheckingInspection
-      spec.withProjectLibrary("javaslang")
+      spec.withProjectLibrary("vavr")
       spec.withProjectLibrary("javax-inject")
 
       withKotlincInPluginDirectory(spec)

@@ -21,7 +21,7 @@ abstract class BaseJetBrainsExternalProductResourceUrls : ExternalProductResourc
   abstract val basePatchDownloadUrl: Url
 
   /**
-   * Returns ID of YouTrack Project which will be used by the "Submit a Bug Report" action.
+   * Returns ID of YouTrack project which will be used by the "Submit a Bug Report" action.
    */
   abstract val youtrackProjectId: String
 
@@ -64,8 +64,9 @@ abstract class BaseJetBrainsExternalProductResourceUrls : ExternalProductResourc
     get() = false
 
   override val updateMetadataUrl: Url
-    get() = System.getProperty("idea.updates.url")?.let { Urls.newFromEncoded(it) }
-            ?: UpdateRequestParameters.amendUpdateRequest(Urls.newFromEncoded("https://www.jetbrains.com/updates/updates.xml"))
+    get() = System.getProperty("idea.updates.url", "https://www.jetbrains.com/updates/updates.xml")
+      .let { Urls.newFromEncoded(it) }
+      .let { UpdateRequestParameters.amendUpdateRequest(it) }
 
   final override fun computePatchUrl(from: BuildNumber, to: BuildNumber): Url =
     computeCustomPatchDownloadUrl(from, to)

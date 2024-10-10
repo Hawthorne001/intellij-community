@@ -13,6 +13,7 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.extensions.ExtensionPointListener;
 import com.intellij.openapi.extensions.ExtensionPointName;
 import com.intellij.openapi.extensions.PluginDescriptor;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiCompiledElement;
@@ -175,8 +176,9 @@ public final class TextEditorHighlightingPassRegistrarImpl extends TextEditorHig
     PassConfig[] frozenPassConfigs = freezeRegisteredPassFactories();
     List<TextEditorHighlightingPass> result = new ArrayList<>(frozenPassConfigs.length);
     IntList passesRefusedToCreate = new IntArrayList();
-    try (AccessToken ignored = ClientId.withClientId(ClientEditorManager.Companion.getClientId(editor))) {
+    try (AccessToken ignored = ClientId.withExplicitClientId(ClientEditorManager.Companion.getClientId(editor))) {
       for (int passId = 1; passId < frozenPassConfigs.length; passId++) {
+        ProgressManager.checkCanceled();
         PassConfig passConfig = frozenPassConfigs[passId];
         if (passConfig == null) continue;
         if (ArrayUtil.find(passesToIgnore, passId) != -1) {

@@ -1,19 +1,24 @@
 // Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.script.k2
 
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.roots.ProjectRootManager
+import com.intellij.platform.backend.workspace.virtualFile
 import com.intellij.platform.backend.workspace.workspaceModel
 import com.intellij.platform.workspace.storage.MutableEntityStorage
+import com.intellij.platform.workspace.storage.url.VirtualFileUrl
 import org.jetbrains.annotations.NonNls
 import org.jetbrains.kotlin.idea.base.util.runReadActionInSmartMode
+import org.jetbrains.kotlin.idea.core.script.KotlinScriptEntitySource
 import org.jetbrains.kotlin.idea.core.script.SCRIPT_DEPENDENCIES_SOURCES
-import org.jetbrains.kotlin.idea.core.script.creteScriptModules
+import org.jetbrains.kotlin.idea.core.script.getUpdatedStorage
 import org.jetbrains.kotlin.idea.core.script.k2.BaseScriptModel
 import org.jetbrains.kotlin.idea.core.script.k2.ScriptDependenciesData
 import org.jetbrains.kotlin.idea.core.script.k2.ScriptDependenciesSource
 import org.jetbrains.kotlin.scripting.definitions.findScriptDefinition
+import org.jetbrains.kotlin.scripting.resolve.ScriptReportSink
 import org.jetbrains.kotlin.scripting.resolve.VirtualFileScriptSource
 import org.jetbrains.kotlin.scripting.resolve.refineScriptCompilationConfiguration
 import org.jetbrains.kotlin.utils.addToStdlib.safeAs
@@ -43,20 +48,34 @@ class CustomScriptDependenciesSource(override val project: Project) : ScriptDepe
             }
         }
 
-        return ScriptDependenciesData(
-            configurations,
-            sdks = sdk?.homePath?.let<@NonNls String, Map<Path, Sdk>> { mapOf(Path.of(it) to sdk) } ?: emptyMap()
-        )
+        configurations.forEach { script, result ->
+            project.service<ScriptReportSink>().attachReports(script, result.reports)
+        }
+
+        return currentConfigurationsData.get().compose(
+            ScriptDependenciesData(
+                configurations,
+                sdks = sdk?.homePath?.let<@NonNls String, Map<Path, Sdk>> { mapOf(Path.of(it) to sdk) } ?: emptyMap()
+            ))
     }
 
     override suspend fun updateModules(dependencies: ScriptDependenciesData, storage: MutableEntityStorage?) {
-        val storageSnapshot = project.workspaceModel.currentSnapshot
-        val tempStorage = MutableEntityStorage.from(storageSnapshot)
+        val updatedStorage = getUpdatedStorage(
+            project, dependencies
+        ) { KotlinCustomScriptModuleEntitySource(it) }
 
-        creteScriptModules(project, dependencies, tempStorage)
+        val scriptFiles =
+            dependencies.configurations.keys.toSet()
 
         project.workspaceModel.update("Updating MainKts Kotlin Scripts modules") {
-            it.applyChangesFrom(tempStorage)
+            it.replaceBySource(
+                { source ->
+                    (source as? KotlinCustomScriptModuleEntitySource)?.let {
+                        scriptFiles.contains(it.virtualFileUrl?.virtualFile)
+                    } == true
+                },
+                updatedStorage
+            )
         }
     }
 
@@ -66,4 +85,7 @@ class CustomScriptDependenciesSource(override val project: Project) : ScriptDepe
                 .filterIsInstance<CustomScriptDependenciesSource>().firstOrNull()
                 .safeAs<CustomScriptDependenciesSource>()
     }
+
+    open class KotlinCustomScriptModuleEntitySource(override val virtualFileUrl: VirtualFileUrl?) :
+        KotlinScriptEntitySource(virtualFileUrl)
 }

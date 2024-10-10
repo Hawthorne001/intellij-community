@@ -49,7 +49,6 @@ import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.blockingContext
 import com.intellij.openapi.progress.impl.CoreProgressManager
 import com.intellij.openapi.progress.runBlockingCancellable
-import com.intellij.openapi.progress.runBlockingModalWithRawProgressReporter
 import com.intellij.openapi.project.*
 import com.intellij.openapi.project.ex.ProjectEx
 import com.intellij.openapi.project.ex.ProjectManagerEx
@@ -71,13 +70,12 @@ import com.intellij.platform.PlatformProjectOpenProcessor
 import com.intellij.platform.PlatformProjectOpenProcessor.Companion.isLoadedFromCacheButHasNoModules
 import com.intellij.platform.attachToProjectAsync
 import com.intellij.platform.diagnostic.telemetry.impl.span
-import com.intellij.platform.ide.progress.ModalTaskOwner
+import com.intellij.platform.project.ProjectEntitiesStorage
 import com.intellij.platform.workspace.jps.JpsMetrics
 import com.intellij.projectImport.ProjectAttachProcessor
 import com.intellij.serviceContainer.ComponentManagerImpl
 import com.intellij.ui.IdeUICustomization
 import com.intellij.util.ArrayUtil
-import com.intellij.util.PathUtilRt
 import com.intellij.util.PlatformUtils.isDataSpell
 import com.intellij.util.concurrency.ThreadingAssertions
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
@@ -535,10 +533,7 @@ open class ProjectManagerImpl : ProjectManagerEx(), Disposable {
     }
 
     @Suppress("DEPRECATION")
-    val project = runBlockingModalWithRawProgressReporter(
-      owner = ModalTaskOwner.guess(),
-      title = IdeUICustomization.getInstance().projectMessage("progress.title.project.creating.name", name ?: PathUtilRt.getFileName(path)),
-    ) {
+    val project = runUnderModalProgressIfIsEdt {
       val file = toCanonicalName(path)
       removeProjectConfigurationAndCaches(file)
       val project = instantiateProject(projectStoreBaseDir = file, options = options)
@@ -589,6 +584,9 @@ open class ProjectManagerImpl : ProjectManagerEx(), Disposable {
         null
       }
     }?.let {
+      withContext(NonCancellable) {
+        cancelProjectOpening(options.project, it)
+      }
       throw it
     }
 
@@ -596,6 +594,9 @@ open class ProjectManagerImpl : ProjectManagerEx(), Disposable {
       !checkChildProcess(projectStoreBaseDir, options)
     }
     if (!continueOpen) {
+      withContext(NonCancellable) {
+        cancelProjectOpening(options.project)
+      }
       return null
     }
 
@@ -614,6 +615,9 @@ open class ProjectManagerImpl : ProjectManagerEx(), Disposable {
 
         if (checkExistingProjectOnOpen(projectToClose, options, projectStoreBaseDir)) {
           LOG.info("Project check is not succeeded -> return null")
+          withContext(NonCancellable) {
+            cancelProjectOpening(options.project)
+          }
           return null
         }
       }
@@ -701,26 +705,7 @@ open class ProjectManagerImpl : ProjectManagerEx(), Disposable {
     }
     catch (e: CancellationException) {
       withContext(NonCancellable) {
-        result?.let { project ->
-          try {
-            try {
-              // cancel async preloading of services as soon as possible
-              (project as ProjectImpl).getCoroutineScope().coroutineContext.job.cancelAndJoin()
-            }
-            catch (secondException: Throwable) {
-              e.addSuppressed(secondException)
-            }
-
-            withContext(Dispatchers.EDT) {
-              writeIntentReadAction {
-                closeProject(project, saveProject = false, checkCanClose = false)
-              }
-            }
-          }
-          catch (secondException: Throwable) {
-            e.addSuppressed(secondException)
-          }
-        }
+        cancelProjectOpening(result, e)
         failedToOpenProject(frameAllocator = frameAllocator, exception = null, options = options)
       }
 
@@ -777,6 +762,29 @@ open class ProjectManagerImpl : ProjectManagerEx(), Disposable {
 
     jpsMetrics.endSpan("project.opening")
     return project
+  }
+
+  private suspend fun cancelProjectOpening(project: Project?, e: CancellationException? = null) {
+    if (project == null) return
+
+    try {
+      try {
+        // cancel async preloading of services as soon as possible
+        (project as ProjectImpl).getCoroutineScope().coroutineContext.job.cancelAndJoin()
+      }
+      catch (secondException: Throwable) {
+        e?.addSuppressed(secondException)
+      }
+
+      withContext(Dispatchers.EDT) {
+        writeIntentReadAction {
+          closeProject(project, saveProject = false, checkCanClose = false)
+        }
+      }
+    }
+    catch (secondException: Throwable) {
+      e?.addSuppressed(secondException)
+    }
   }
 
   private suspend fun failedToOpenProject(frameAllocator: ProjectFrameAllocator, exception: Throwable?, options: OpenProjectTask) {
@@ -1156,6 +1164,7 @@ private fun ensureCouldCloseIfUnableToSave(project: Project): Boolean {
                                   Messages.getWarningIcon()) == Messages.YES
 }
 
+@Internal
 class UnableToSaveProjectNotification(project: Project, readOnlyFiles: List<VirtualFile>) : Notification("Project Settings",
                                                                                                          IdeUICustomization.getInstance().projectMessage(
                                                                                                            "notification.title.cannot.save.project"),
@@ -1214,12 +1223,12 @@ private fun removeProjectConfigurationAndCaches(projectFile: Path) {
       }
     }
   }
-  catch (ignored: IOException) {
+  catch (_: IOException) {
   }
   try {
     getProjectDataPathRoot(projectFile).delete()
   }
-  catch (ignored: IOException) {
+  catch (_: IOException) {
   }
 }
 
@@ -1285,6 +1294,9 @@ private suspend fun initProject(
     }
 
     project.putUserDataIfAbsent(PROJECT_PATH, file)
+
+    ProjectEntitiesStorage.getInstance().createEntity(project)
+
     project.registerComponents()
     registerComponentActivity?.end()
 
@@ -1424,6 +1436,7 @@ interface ProjectServiceContainerInitializedListener {
   suspend fun execute(project: Project, workspaceIndexReady: () -> Unit)
 }
 
+@Internal
 @TestOnly
 interface ProjectServiceContainerCustomizer {
   companion object {

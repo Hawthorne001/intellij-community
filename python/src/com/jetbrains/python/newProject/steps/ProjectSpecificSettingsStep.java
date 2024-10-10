@@ -14,7 +14,6 @@ import com.intellij.openapi.ui.LabeledComponent;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.openapi.ui.VerticalFlowLayout;
 import com.intellij.openapi.util.Pair;
-import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.util.text.HtmlChunk;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.util.text.TextWithMnemonic;
@@ -32,7 +31,6 @@ import com.jetbrains.python.newProject.PythonProjectGenerator;
 import com.jetbrains.python.newProject.collector.InterpreterStatisticsInfo;
 import com.jetbrains.python.packaging.PyPackage;
 import com.jetbrains.python.packaging.PyPackageUtil;
-import com.jetbrains.python.psi.PyUtil;
 import com.jetbrains.python.run.PythonInterpreterTargetEnvironmentFactory;
 import com.jetbrains.python.sdk.*;
 import com.jetbrains.python.sdk.add.PyAddSdkGroupPanel;
@@ -50,6 +48,10 @@ import java.util.List;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * @deprecated Use {@link com.jetbrains.python.newProjectWizard}
+ */
+@Deprecated
 public class ProjectSpecificSettingsStep<T extends PyNewProjectSettings> extends ProjectSettingsStepBase<T> implements DumbAware {
   private boolean myInstallFramework;
   private @Nullable PyAddSdkGroupPanel myInterpreterPanel;
@@ -57,7 +59,9 @@ public class ProjectSpecificSettingsStep<T extends PyNewProjectSettings> extends
 
   public ProjectSpecificSettingsStep(final @NotNull DirectoryProjectGenerator<T> projectGenerator,
                                      final @NotNull AbstractNewProjectStep.AbstractCallback<T> callback) {
-    super(projectGenerator, callback);
+    super(projectGenerator, callback, (projectGenerator instanceof PythonProjectGenerator<T> pyProjectGenerator)
+                                      ? pyProjectGenerator.getNewProjectPrefix()
+                                      : null);
   }
 
   @Override
@@ -72,19 +76,12 @@ public class ProjectSpecificSettingsStep<T extends PyNewProjectSettings> extends
   @Override
   protected @Nullable JPanel createAdvancedSettings() {
     JComponent advancedSettings = null;
-    if (myProjectGenerator instanceof PythonProjectGenerator) {
-      advancedSettings = ((PythonProjectGenerator<?>)myProjectGenerator).getSettingsPanel(myProjectDirectory.get());
-    }
-    else if (myProjectGenerator instanceof WebProjectTemplate) {
-      advancedSettings = getPeer().getComponent();
+    if (myProjectGenerator instanceof WebProjectTemplate) {
+      advancedSettings = getPeer().getComponent(myLocationField, () -> checkValid());
     }
     if (advancedSettings != null) {
       final JPanel jPanel = new JPanel(new VerticalFlowLayout());
       final HideableDecorator deco = new HideableDecorator(jPanel, PyBundle.message("python.new.project.more.settings"), false);
-      if (myProjectGenerator instanceof PythonProjectGenerator) {
-        final ValidationResult result = ((PythonProjectGenerator<?>)myProjectGenerator).warningValidation(getInterpreterPanelSdk());
-        deco.setOn(!result.isOk());
-      }
       deco.setContentComponent(advancedSettings);
       return jPanel;
     }
@@ -181,7 +178,7 @@ public class ProjectSpecificSettingsStep<T extends PyNewProjectSettings> extends
 
     if (validationErrors.isEmpty()) {
       // Once can't create anything on immutable SDK
-      var sdk = (interpreterPanel != null) ?  interpreterPanel.getSdk() : null;
+      var sdk = (interpreterPanel != null) ? interpreterPanel.getSdk() : null;
       if (sdk != null && isImmutableSdk(sdk)) {
         validationErrors = List.of(
           PyBundle.message("python.unknown.project.synchronizer.this.interpreter.type.does.not.support.remote.project.creation"));
@@ -288,10 +285,6 @@ public class ProjectSpecificSettingsStep<T extends PyNewProjectSettings> extends
       panel.add(locationPanel);
       panel.add(createInterpretersPanel(((PythonProjectGenerator<?>)myProjectGenerator).getPreferredEnvironmentType()));
 
-      final JPanel basePanelExtension = ((PythonProjectGenerator<?>)myProjectGenerator).extendBasePanel();
-      if (basePanelExtension != null) {
-        panel.add(basePanelExtension);
-      }
       return panel;
     }
 
@@ -308,7 +301,8 @@ public class ProjectSpecificSettingsStep<T extends PyNewProjectSettings> extends
     final Sdk preferredSdk = existingSdks.stream().findFirst().orElse(null);
 
     final String newProjectPath = getProjectLocation();
-    final PyAddNewEnvironmentPanel newEnvironmentPanel = new PyAddNewEnvironmentPanel(allExistingSdks, newProjectPath, preferredEnvironment);
+    final PyAddNewEnvironmentPanel newEnvironmentPanel =
+      new PyAddNewEnvironmentPanel(allExistingSdks, newProjectPath, preferredEnvironment);
     final PyAddExistingSdkPanel existingSdkPanel = new PyAddExistingSdkPanel(null, null, existingSdks, newProjectPath, preferredSdk);
 
     PyAddSdkPanel defaultPanel = PySdkSettings.getInstance().getUseNewEnvironmentForNewProject() ?
@@ -356,16 +350,7 @@ public class ProjectSpecificSettingsStep<T extends PyNewProjectSettings> extends
       .toList();
   }
 
-  @Override
-  protected @NotNull File findSequentNonExistingUntitled() {
-    return Optional
-      .ofNullable(PyUtil.as(myProjectGenerator, PythonProjectGenerator.class))
-      .map(PythonProjectGenerator::getNewProjectPrefix)
-      .map(it -> FileUtil.findSequentNonexistentFile(getBaseDir(), it, ""))
-      .orElseGet(() -> super.findSequentNonExistingUntitled());
-  }
-
-  /**
+   /**
    * If {@link PythonProjectGenerator} {@link PythonProjectGenerator#supportsWelcomeScript()},
    * {@link ProjectSpecificSettingsStep} and inheritors should ask use if one should be created, and return true if so.
    */

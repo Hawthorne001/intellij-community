@@ -37,13 +37,13 @@ public final class BuildTargetConfiguration {
   private static final String DIRTY_MARK = "$dirty_mark$";
 
   private final BuildTarget<?> target;
-  private final BuildTargetsState myTargetsState;
+  private final BuildTargetsState targetState;
   private @NotNull String configuration;
   private volatile String currentState;
 
-  public BuildTargetConfiguration(BuildTarget<?> target, BuildTargetsState targetsState) {
+  public BuildTargetConfiguration(@NotNull BuildTarget<?> target, @NotNull BuildTargetsState targetState) {
     this.target = target;
-    myTargetsState = targetsState;
+    this.targetState = targetState;
     configuration = load();
   }
 
@@ -54,7 +54,7 @@ public final class BuildTargetConfiguration {
     catch (NoSuchFileException ignore) {
     }
     catch (IOException e) {
-      LOG.info("Cannot load configuration of " + target);
+      LOG.warn("Cannot load configuration of " + target, e);
     }
     return "";
   }
@@ -77,12 +77,11 @@ public final class BuildTargetConfiguration {
 
       if (LOG.isDebugEnabled()) {
         LOG.debug(target + " configuration was changed:");
-        LOG.debug("Old:");
-        LOG.debug(configuration);
-        LOG.debug("New:");
-        LOG.debug(currentState);
+        LOG.debug("Old: " + configuration);
+        LOG.debug("New: " + currentState);
         LOG.debug(target + " will be recompiled");
       }
+
       if (target instanceof ModuleBuildTarget) {
         final JpsModule module = ((ModuleBuildTarget)target).getModule();
         synchronized (MODULES_WITH_TARGET_CONFIG_CHANGED_KEY) {
@@ -116,15 +115,15 @@ public final class BuildTargetConfiguration {
     }
   }
 
-  private Path getConfigFile() {
-    return myTargetsState.getDataPaths().getTargetDataRootDir(target).resolve("config.dat");
+  private @NotNull Path getConfigFile() {
+    return targetState.getDataPaths().getTargetDataRootDir(target).resolve("config.dat");
   }
 
-  private Path getNonexistentOutputsFile() {
-    return myTargetsState.getDataPaths().getTargetDataRootDir(target).resolve("nonexistent-outputs.dat");
+  private @NotNull Path getNonexistentOutputsFile() {
+    return targetState.getDataPaths().getTargetDataRootDir(target).resolve("nonexistent-outputs.dat");
   }
 
-  private @NotNull String getCurrentState(@NotNull ProjectDescriptor pd) {
+  private @NotNull String getCurrentState(@NotNull ProjectDescriptor projectDescriptor) {
     String state = currentState;
     if (state != null) {
       return state;
@@ -132,19 +131,19 @@ public final class BuildTargetConfiguration {
 
     if (target instanceof BuildTargetHashSupplier) {
       HashStream64 hash = Hashing.komihash5_0().hashStream();
-      ((BuildTargetHashSupplier)target).computeConfigurationDigest(pd, hash);
+      ((BuildTargetHashSupplier)target).computeConfigurationDigest(projectDescriptor, hash);
       state = Long.toUnsignedString(hash.getAsLong(), Character.MAX_RADIX);
     }
     else {
       StringWriter out = new StringWriter();
-      target.writeConfiguration(pd, new PrintWriter(out));
+      target.writeConfiguration(projectDescriptor, new PrintWriter(out));
       state = out.toString();
     }
     currentState = state;
     return state;
   }
 
-  public void storeNonexistentOutputRoots(CompileContext context) throws IOException {
+  public void storeNonexistentOutputRoots(@NotNull CompileContext context) throws IOException {
     PathRelativizerService relativizer = context.getProjectDescriptor().dataManager.getRelativizer();
     Collection<File> outputRoots = target.getOutputRoots(context);
     List<String> nonexistentOutputRoots = new ArrayList<>();

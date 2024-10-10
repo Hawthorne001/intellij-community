@@ -1,7 +1,6 @@
 // Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.vfs.impl.local;
 
-import com.intellij.ReviseWhenPortedToJDK;
 import com.intellij.core.CoreBundle;
 import com.intellij.ide.IdeCoreBundle;
 import com.intellij.openapi.diagnostic.Logger;
@@ -11,6 +10,7 @@ import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.SystemInfoRt;
 import com.intellij.openapi.util.io.*;
 import com.intellij.openapi.vfs.*;
+import com.intellij.openapi.vfs.limits.FileSizeLimit;
 import com.intellij.openapi.vfs.newvfs.ManagingFS;
 import com.intellij.openapi.vfs.newvfs.RefreshQueue;
 import com.intellij.openapi.vfs.newvfs.VfsImplUtil;
@@ -23,7 +23,6 @@ import com.intellij.util.ThrowableConsumer;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.io.PreemptiveSafeFileOutputStream;
 import com.intellij.util.io.SafeFileOutputStream;
-import com.intellij.util.lang.JavaVersion;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -33,6 +32,7 @@ import java.io.*;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -360,7 +360,8 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
     //          as a first file.size() request alone. So that optimization needs to be carefully benchmarked to prove it
     //          does provide anything -- and my guess: it probably doesn't
     var length = Files.size(nioFile);
-    if (FileUtilRt.isTooLarge(length)) {
+
+    if (FileSizeLimit.isTooLarge(length, FileUtilRt.getExtension(nioFile.getFileName().toString()))) {
       throw new FileTooBigException("File " + nioFile.toAbsolutePath() + " is too large (=" + length + " b)");
     }
     return Files.readAllBytes(nioFile);
@@ -504,7 +505,6 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
   }
 
   @Override
-  @ReviseWhenPortedToJDK("21")
   public @NotNull String getCanonicallyCasedName(@NotNull VirtualFile file) {
     var parent = file.getParent();
     if (parent == null || parent.isCaseSensitive()) {
@@ -515,20 +515,29 @@ public abstract class LocalFileSystemBase extends LocalFileSystem {
     var t = LOG.isTraceEnabled() ? System.nanoTime() : 0;
     try {
       var nioFile = convertToNioFileAndCheck(file, false);
-      if (SystemInfo.isWindows || JavaVersion.current().isAtLeast(21)) {
-        var realName = nioFile.toRealPath(LinkOption.NOFOLLOW_LINKS).getFileName().toString();
-        if (originalFileName.equalsIgnoreCase(realName)) {
-          return realName;
+      if (SystemInfo.isWindows) {
+        return nioFile.toRealPath(LinkOption.NOFOLLOW_LINKS).getFileName().toString();
+      }
+      else {
+        // Handle one common case as quickly as possible: compute the file's realpath, resolving links
+        // (to avoid quadratic behaviour from directory listing). In general this is not a suitable canonical name for the
+        // file, because links have been resolved, but if the result compares with case-insensitive equality with the given
+        // file's path, then the return value is suitable for use as a canonical name.
+        var resolvedRealPath = nioFile.toRealPath();
+        if (resolvedRealPath.toString().equalsIgnoreCase(file.getPath())) {
+          return resolvedRealPath.getFileName().toString();
         }
       }
-      var parentFile = nioFile.getParent();
-      if (parentFile != null) {
-        var canonicalFileNames = parentFile.toFile().list();
-        if (canonicalFileNames != null) {
-          for (var name : canonicalFileNames) {
-            if (name.equalsIgnoreCase(originalFileName)) {
-              return name;
-            }
+      // `Path#toRealPath` resolves the whole path starting from the root, but only the last component is necessary
+      try (var stream = Files.newDirectoryStream(convertToNioFileAndCheck(parent, false))) {
+        for (var path : stream) {
+          var name = path.getFileName().toString();
+          if (
+            originalFileName.equalsIgnoreCase(name) ||
+            Normalizer.isNormalized(originalFileName, Normalizer.Form.NFC) &&
+            originalFileName.equalsIgnoreCase(Normalizer.normalize(name, Normalizer.Form.NFC))
+          ) {
+            return name;
           }
         }
       }

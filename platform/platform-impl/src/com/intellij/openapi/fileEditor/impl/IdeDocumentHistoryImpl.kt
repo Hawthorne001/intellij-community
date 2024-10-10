@@ -455,6 +455,8 @@ open class IdeDocumentHistoryImpl(
 
   final override fun getBackPlaces(): List<PlaceInfo> = java.util.List.copyOf(backPlaces)
 
+  final override fun getForwardPlaces(): List<PlaceInfo> = java.util.List.copyOf(forwardPlaces)
+
   final override fun getChangePlaces(): List<PlaceInfo> = java.util.List.copyOf(changePlaces)
 
   final override fun removeBackPlace(placeInfo: PlaceInfo) {
@@ -508,14 +510,16 @@ open class IdeDocumentHistoryImpl(
 
   override fun gotoPlaceInfo(info: PlaceInfo, requestFocus: Boolean) {
     val editorManager = getFileEditorManager()!!
+    val openMode = info.getOpenMode()
+    val window = if (openMode != FileEditorManagerImpl.OpenMode.NEW_WINDOW) info.getWindow() else null
     val editorsWithProviders = editorManager.openFile(
       file = info.file,
-      window = info.getWindow(),
+      window = window,
       options = FileEditorOpenOptions(
         usePreviewTab = info.isPreviewTab,
         requestFocus = requestFocus,
         reuseOpen = true,
-        openMode = info.getOpenMode(),
+        openMode = openMode,
       ),
     )
 

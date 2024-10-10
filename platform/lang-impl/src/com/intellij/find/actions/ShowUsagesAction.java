@@ -179,7 +179,7 @@ public final class ShowUsagesAction extends AnAction implements PopupAction, Hin
 
   @Override
   public void update(@NotNull AnActionEvent e) {
-    FindUsagesAction.updateFindUsagesAction(e);
+    FindUsagesInFileAction.updateFindUsagesAction(e);
 
     if (e.getPresentation().isEnabled()) {
       UsageTarget[] usageTargets = e.getData(UsageView.USAGE_TARGETS_KEY);
@@ -527,7 +527,10 @@ public final class ShowUsagesAction extends AnAction implements PopupAction, Hin
     AtomicBoolean manuallyResized = new AtomicBoolean();
     Ref<UsageNode> preselectedRow = new Ref<>();
 
-    Predicate<? super Usage> originUsageCheck = originUsageCheck(parameters.editor);
+    Predicate<? super Usage> originUsageCheck;
+    try (AccessToken ignore = SlowOperations.knownIssue("IJPL-162330")) {
+      originUsageCheck = originUsageCheck(parameters.editor);
+    }
     ShowUsagesTableCellRenderer renderer = new ShowUsagesTableCellRenderer(originUsageCheck, outOfScopeUsages, searchScope);
     ShowUsagesTable table = new ShowUsagesTable(renderer, usageView);
 
@@ -1413,6 +1416,8 @@ public final class ShowUsagesAction extends AnAction implements PopupAction, Hin
                                    @NotNull IntRef minWidth,
                                    boolean showCodePreview,
                                    int dataSize) {
+
+    if (Registry.is("find.usages.disable.smart.size", false)) return;
 
     if (isCodeWithMeClientInstance(popup)) return;
 

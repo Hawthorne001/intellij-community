@@ -57,8 +57,10 @@ final class ModuleHighlightUtil {
       if (packageName != null) {
         PsiJavaModule origin = JavaModuleGraphUtil.findOrigin(javaModule, packageName);
         if (origin != null) {
-          String message = JavaErrorBundle.message("module.conflicting.packages", packageName, origin.getName());
-          return HighlightInfo.newHighlightInfo(HighlightInfoType.ERROR).range(statement).descriptionAndTooltip(message);
+          PsiJavaCodeReferenceElement reference = statement.getPackageReference();
+          return HighlightInfo.newHighlightInfo(HighlightInfoType.ERROR)
+            .range(reference)
+            .descriptionAndTooltip(JavaErrorBundle.message("module.conflicting.packages", packageName, origin.getName()));
         }
       }
     }
@@ -80,9 +82,14 @@ final class ModuleHighlightUtil {
               if (rootForFile != null && JavaCompilerConfigurationProxy.isPatchedModuleRoot(anotherJavaModule.getName(), module, rootForFile)) {
                 return null;
               }
-              return HighlightInfo.newHighlightInfo(HighlightInfoType.ERROR)
-                .range(reference)
-                .descriptionAndTooltip(JavaErrorBundle.message("module.conflicting.packages", pack.getName(), anotherJavaModule.getName()));
+              for (PsiPackageAccessibilityStatement export : anotherJavaModule.getExports()) {
+                String exportPackageName = export.getPackageName();
+                if (exportPackageName != null && exportPackageName.equals(pack.getQualifiedName())) {
+                  return HighlightInfo.newHighlightInfo(HighlightInfoType.ERROR)
+                    .range(reference)
+                    .descriptionAndTooltip(JavaErrorBundle.message("module.conflicting.packages", pack.getQualifiedName(), anotherJavaModule.getName()));
+                }
+              }
             }
           }
         }

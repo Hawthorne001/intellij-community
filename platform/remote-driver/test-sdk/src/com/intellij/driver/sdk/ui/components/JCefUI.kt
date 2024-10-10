@@ -3,6 +3,7 @@ package com.intellij.driver.sdk.ui.components
 import com.intellij.driver.client.Remote
 import com.intellij.driver.sdk.ui.Finder
 import com.intellij.driver.sdk.ui.remote.REMOTE_ROBOT_MODULE_ID
+import com.intellij.driver.sdk.waitFor
 import com.intellij.driver.sdk.waitForOne
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -41,14 +42,14 @@ fun Finder.jcef(@Language("xpath") xpath: String? = null, action: JCefUI.() -> U
 }
 
 class JCefUI(data: ComponentData) : UiComponent(data) {
-  private val jcefWorker by lazy {
-    driver.new(JcefComponentWrapper::class, component).apply {
-      runJs(initScript)
-    }
-  }
+  private val jcefWorker by lazy { driver.new(JcefComponentWrapper::class, component) }
 
   private val json = Json {
     ignoreUnknownKeys = true
+  }
+
+  fun getYOffset(): Double {
+    return callJs("window.pageYOffset.toString()").toDouble()
   }
 
   fun findElement(@Language("XPath") xpath: String, wait: Duration = 5.seconds): DomElement {
@@ -88,14 +89,27 @@ class JCefUI(data: ComponentData) : UiComponent(data) {
     }
   }
 
-  val dom: String
-    get() = callJs("""document.documentElement.outerHTML""")
+  fun hasDocument(): Boolean = jcefWorker.hasDocument()
 
-  private fun callJs(@Language("JavaScript") js: String, timeout: Long = 3000): String {
+  fun getUrl(): String =  jcefWorker.getUrl()
+
+  fun getHtml(): String {
+    return callJs("""document.documentElement.outerHTML""")
+  }
+
+  fun callJs(@Language("JavaScript") js: String, timeout: Long = 3000): String {
+    waitFor("document exists", 10.seconds) { hasDocument() }
+    injectElementFinderIfNeeded()
     return jcefWorker.callJs(js, timeout)
   }
 
   private fun String.escapeXpath() = replace("'", "\\x27").replace("\"", "\\x22")
+
+  private fun injectElementFinderIfNeeded() {
+    if (!jcefWorker.callJs("!!window.elementFinder", 3_000).toBoolean()) {
+      jcefWorker.runJs(initScript)
+    }
+  }
 
   /**
    * JavaScript functions we need on the browser side.
@@ -163,6 +177,8 @@ class JCefUI(data: ComponentData) : UiComponent(data) {
 private interface JcefComponentWrapper {
   fun runJs(@Language("JavaScript") js: String)
   fun callJs(@Language("JavaScript") js: String, executeTimeoutMs: Long): String
+  fun hasDocument(): Boolean
+  fun getUrl(): String
 }
 
 

@@ -52,7 +52,7 @@ private data class RetractionRelation(override val eid: EID) : Entity {
 
 fun ChangeScope.sharedCascadeDelete(parent: Entity, child: Entity?) {
   if (child != null) {
-    shared {
+    withDefaultPart(SharedPart) {
       SharedRetractionRelation.new {
         it[SharedRetractionRelation.ParentAttr] = parent
         it[SharedRetractionRelation.ChildAttr] = child
@@ -67,15 +67,6 @@ fun ChangeScope.cascadeDelete(parent: Entity, child: Entity?) {
       it[RetractionRelation.ParentAttr] = parent
       it[RetractionRelation.ChildAttr] = child
     }
-  }
-}
-
-fun <T : LegacyEntity> ChangeScope.newOrMutateSingleton(c: KClass<T>, initMutate: T.() -> Unit): T {
-  val res = byEntityType(c)
-  return when {
-    res.isEmpty() -> new(c, defaultPart, initMutate)
-    res.size == 1 -> res.single().apply(initMutate)
-    else -> error("entity of type $c is not single: $res")
   }
 }
 

@@ -1,22 +1,21 @@
 package com.intellij.notebooks.visualization.ui
 
-import com.intellij.openapi.Disposable
-import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.util.*
-import com.intellij.platform.util.coroutines.childScope
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import com.intellij.notebooks.ui.editor.actions.command.mode.NotebookEditorMode
 import com.intellij.notebooks.visualization.NotebookCellInlayController
 import com.intellij.notebooks.visualization.NotebookCellInlayManager
 import com.intellij.notebooks.visualization.NotebookIntervalPointer
 import com.intellij.notebooks.visualization.UpdateContext
 import com.intellij.notebooks.visualization.execution.ExecutionEvent
+import com.intellij.notebooks.visualization.outputs.NotebookOutputDataKey
+import com.intellij.notebooks.visualization.outputs.NotebookOutputDataKeyExtractor
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.editor.impl.EditorImpl
+import com.intellij.openapi.observable.properties.AtomicBooleanProperty
+import com.intellij.openapi.observable.properties.AtomicProperty
+import com.intellij.openapi.util.*
 import java.time.ZonedDateTime
 import kotlin.reflect.KClass
 
@@ -26,14 +25,33 @@ class EditorCell(
   private val editor: EditorEx,
   val manager: NotebookCellInlayManager,
   var intervalPointer: NotebookIntervalPointer,
-  parentScope: CoroutineScope,
-  private val viewFactory: (EditorCell) -> EditorCellView,
 ) : Disposable, UserDataHolder by UserDataHolderBase() {
 
-  private val coroutineScope = parentScope.childScope("EditorCell")
+  val source = AtomicProperty<String>(getSource())
 
-  private val _source = MutableStateFlow<String>(getSource())
-  val source = _source.asStateFlow()
+  val type = interval.type
+
+  val interval get() = intervalPointer.get() ?: error("Invalid interval")
+
+  val view: EditorCellView?
+    get() = manager.views[this]
+
+  var visible = AtomicBooleanProperty(true)
+
+  val selected = AtomicBooleanProperty(false)
+
+  val gutterAction = AtomicProperty<AnAction?>(null)
+
+  val executionStatus = AtomicProperty<ExecutionStatus>(ExecutionStatus())
+
+  // ToDo we should remove or rework this. Mode does not really reflects the state of markdown cells.
+  val mode = AtomicProperty<NotebookEditorMode>(NotebookEditorMode.COMMAND)
+
+  val outputs = AtomicProperty<List<NotebookOutputDataKey>>(getOutputs())
+
+  init {
+    CELL_EXTENSION_CONTAINER_KEY.set(this, mutableMapOf())
+  }
 
   private fun getSource(): String {
     val document = editor.document
@@ -44,79 +62,8 @@ class EditorCell(
     return document.getText(TextRange(startOffset, endOffset))
   }
 
-  val type = interval.type
-
-  val interval get() = intervalPointer.get() ?: error("Invalid interval")
-
-  var view: EditorCellView? = null
-
-  var visible: Boolean = true
-    set(value) {
-      if (field == value) return
-      field = value
-      manager.update<Unit> { ctx ->
-        if (!value) {
-          view?.let {
-            disposeView(it)
-          }
-        }
-        else {
-          if (view == null) {
-            view = createView()
-          }
-        }
-      }
-    }
-
-  init {
-    CELL_EXTENSION_CONTAINER_KEY.set(this, mutableMapOf())
-  }
-
-  fun initView() {
-    view = createView()
-  }
-
-  private fun createView(): EditorCellView = manager.update { ctx ->
-    val view = viewFactory(this).also { Disposer.register(this, it) }
-    gutterAction?.let { view.setGutterAction(it) }
-    view.updateExecutionStatus(executionCount, progressStatus, executionStartTime, executionEndTime)
-    view.selected = selected
-    manager.fireCellViewCreated(view)
-    view.updateCellFolding(ctx)
-    view
-  }
-
-  private fun disposeView(it: EditorCellView) {
-    Disposer.dispose(it)
-    view = null
-    manager.fireCellViewRemoved(it)
-  }
-
-  var selected: Boolean = false
-    set(value) {
-      if (field != value) {
-        field = value
-        view?.selected = value
-      }
-    }
-
-  var gutterAction: AnAction? = null
-    private set
-
-  private var executionCount: Int? = null
-
-  private var progressStatus: ProgressStatus? = null
-
-  private var executionStartTime: ZonedDateTime? = null
-
-  private var executionEndTime: ZonedDateTime? = null
-
-  private var mode = NotebookEditorMode.COMMAND
-
   override fun dispose() {
     cleanupExtensions()
-    view?.let { disposeView(it) }
-    coroutineScope.cancel()
   }
 
   private fun cleanupExtensions() {
@@ -136,10 +83,7 @@ class EditorCell(
   }
 
   fun updateInput() {
-    coroutineScope.launch(Dispatchers.Main) {
-      _source.emit(getSource())
-    }
-    view?.updateInput()
+    source.set(getSource())
   }
 
   fun onViewportChange() {
@@ -147,8 +91,7 @@ class EditorCell(
   }
 
   fun setGutterAction(action: AnAction?) {
-    gutterAction = action
-    view?.setGutterAction(action)
+    gutterAction.set(action)
   }
 
   inline fun <reified T : NotebookCellInlayController> getController(): T? {
@@ -176,42 +119,44 @@ class EditorCell(
   }
 
   fun updateOutputs() {
-    view?.updateOutputs()
+    val outputDataKeys = getOutputs()
+    updateOutputs(outputDataKeys)
+  }
+
+  private fun getOutputs(): List<NotebookOutputDataKey> =
+    NotebookOutputDataKeyExtractor.EP_NAME.extensionList.asSequence()
+      .mapNotNull { it.extract(editor as EditorImpl, interval) }
+      .firstOrNull()
+      ?.takeIf { it.isNotEmpty() }
+    ?: emptyList()
+
+  private fun updateOutputs(newOutputs: List<NotebookOutputDataKey>) = runInEdt {
+    outputs.set(newOutputs)
   }
 
   fun onExecutionEvent(event: ExecutionEvent) {
     when (event) {
       is ExecutionEvent.ExecutionStarted -> {
-        executionStartTime = event.startTime
-        progressStatus = event.status
+        executionStatus.set(executionStatus.get().copy(status = event.status, startTime = event.startTime))
       }
       is ExecutionEvent.ExecutionStopped -> {
-        executionEndTime = event.endTime
-        progressStatus = event.status
-        executionCount = event.executionCount
+        executionStatus.set(executionStatus.get().copy(status = event.status, endTime = event.endTime, count = event.executionCount))
       }
       is ExecutionEvent.ExecutionSubmitted -> {
-        progressStatus = event.status
+        executionStatus.set(executionStatus.get().copy(status = event.status))
       }
       is ExecutionEvent.ExecutionReset -> {
-        progressStatus = event.status
+        executionStatus.set(executionStatus.get().copy(status = event.status))
       }
     }
-    view?.updateExecutionStatus(executionCount, progressStatus, executionStartTime, executionEndTime)
   }
 
-  fun switchToEditMode() = manager.update { ctx ->
-    if (mode != NotebookEditorMode.EDIT) {
-      mode = NotebookEditorMode.EDIT
-      view?.switchToEditMode(ctx)
-    }
+  fun switchToEditMode() = runInEdt {
+    mode.set(NotebookEditorMode.EDIT)
   }
 
-  fun switchToCommandMode() = manager.update { ctx ->
-    if (mode != NotebookEditorMode.COMMAND) {
-      mode = NotebookEditorMode.COMMAND
-      view?.switchToCommandMode(ctx)
-    }
+  fun switchToCommandMode() = runInEdt {
+    mode.set(NotebookEditorMode.COMMAND)
   }
 
   fun requestCaret() {
@@ -238,4 +183,11 @@ class EditorCell(
   private fun forEachExtension(action: (EditorCellExtension) -> Unit) {
     CELL_EXTENSION_CONTAINER_KEY.get(this)?.values?.forEach { action(it) }
   }
+
+  data class ExecutionStatus(
+    val status: ProgressStatus? = null,
+    val count: Int? = null,
+    val startTime: ZonedDateTime? = null,
+    val endTime: ZonedDateTime? = null,
+  )
 }

@@ -10,7 +10,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.analysis.api.KaExperimentalApi
 import org.jetbrains.kotlin.analysis.api.KaSession
-import org.jetbrains.kotlin.analysis.api.annotations.*
+import org.jetbrains.kotlin.analysis.api.annotations.KaAnnotationValue
 import org.jetbrains.kotlin.analysis.api.base.KaConstantValue
 import org.jetbrains.kotlin.analysis.api.fir.diagnostics.KaFirDiagnostic
 import org.jetbrains.kotlin.analysis.api.symbols.KaDeclarationSymbol
@@ -25,28 +25,12 @@ import org.jetbrains.kotlin.idea.k2.refactoring.inline.codeInliner.ClassUsageRep
 import org.jetbrains.kotlin.idea.k2.refactoring.inline.codeInliner.CodeToInlineBuilder
 import org.jetbrains.kotlin.idea.quickfix.replaceWith.ReplaceWithData
 import org.jetbrains.kotlin.idea.refactoring.inline.codeInliner.CodeToInline
+import org.jetbrains.kotlin.idea.refactoring.inline.codeInliner.MutableCodeToInline
 import org.jetbrains.kotlin.idea.refactoring.inline.codeInliner.UsageReplacementStrategy
 import org.jetbrains.kotlin.idea.refactoring.inline.codeInliner.buildCodeToInline
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.idea.util.application.isDispatchThread
-import org.jetbrains.kotlin.psi.KtArrayAccessExpression
-import org.jetbrains.kotlin.psi.KtBinaryExpression
-import org.jetbrains.kotlin.psi.KtCallExpression
-import org.jetbrains.kotlin.psi.KtCallableDeclaration
-import org.jetbrains.kotlin.psi.KtClassLikeDeclaration
-import org.jetbrains.kotlin.psi.KtConstructorCalleeExpression
-import org.jetbrains.kotlin.psi.KtDeclaration
-import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.psi.KtFunction
-import org.jetbrains.kotlin.psi.KtNullableType
-import org.jetbrains.kotlin.psi.KtPrimaryConstructor
-import org.jetbrains.kotlin.psi.KtProperty
-import org.jetbrains.kotlin.psi.KtPsiFactory
-import org.jetbrains.kotlin.psi.KtReferenceExpression
-import org.jetbrains.kotlin.psi.KtSimpleNameExpression
-import org.jetbrains.kotlin.psi.KtTypeReference
-import org.jetbrains.kotlin.psi.KtUserType
-import org.jetbrains.kotlin.psi.KtValVarKeywordOwner
+import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.resolve.calls.util.getCalleeExpressionIfAny
 
 object DeprecationFixFactory {
@@ -70,9 +54,8 @@ object DeprecationFixFactory {
         createDeprecation(kaSymbol, diagnostics.psi)
     }
 
-    context(KaSession)
     @OptIn(KaExperimentalApi::class)
-    private fun createDeprecation(
+    private fun KaSession.createDeprecation(
         kaSymbol: KaDeclarationSymbol,
         psi: PsiElement
     ): List<IntentionAction> {
@@ -104,8 +87,8 @@ class DeprecatedSymbolUsageFix(
     element: KtReferenceExpression,
     replaceWith: ReplaceWithData
 ) : DeprecatedSymbolUsageFixBase(element, replaceWith), HighPriorityAction {
-    override fun getFamilyName() = KotlinBundle.message("replace.deprecated.symbol.usage")
-    override fun getText() = KotlinBundle.message("replace.with.0", replaceWith.pattern)
+    override fun getFamilyName(): String = KotlinBundle.message("replace.deprecated.symbol.usage")
+    override fun getText(): String = KotlinBundle.message("replace.with.0", replaceWith.pattern)
 
     override fun invoke(replacementStrategy: UsageReplacementStrategy, project: Project, editor: Editor?) {
         val element = element ?: return
@@ -193,12 +176,13 @@ abstract class DeprecatedSymbolUsageFixBase(
             val expression =
                 psiFactory.createExpressionCodeFragment(replaceWith.pattern, context).getContentElement() ?: return null
 
-            return buildCodeToInline(target, expression, false, null, CodeToInlineBuilder(original = target))
+            return buildCodeToInline(target, expression, false, null, object : CodeToInlineBuilder(original = target) {
+                override fun saveComments(codeToInline: MutableCodeToInline, contextDeclaration: KtDeclaration) {}
+            })
         }
     }
 }
 
-context(KaSession)
 fun fetchReplaceWithPattern(
     symbol: KaDeclarationSymbol
 ): ReplaceWithData? {

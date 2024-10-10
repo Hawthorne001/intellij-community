@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.xdebugger.impl;
 
 import com.intellij.openapi.Disposable;
@@ -49,9 +49,6 @@ public abstract class DebuggerSupport {
   }
 
   private static final BreakpointPanelProvider<?> EMPTY_PANEL_PROVIDER = new BreakpointPanelProvider<>() {
-    @Override
-    public void createBreakpointsGroupingRules(Collection collection) {
-    }
 
     @Override
     public void addListener(BreakpointsListener listener, Project project, Disposable disposable) {
@@ -145,6 +142,7 @@ public abstract class DebuggerSupport {
   }
 
   public @NotNull QuickEvaluateHandler getQuickEvaluateHandler() {
+    // See [XQuickEvaluateHandler] which is provided in frontend
     return DISABLED_QUICK_EVALUATE;
   }
 
@@ -207,6 +205,7 @@ public abstract class DebuggerSupport {
     return DISABLED_TOGGLE_HANDLER;
   }
 
+  @ApiStatus.Internal
   protected static final MarkObjectActionHandler DISABLED_MARK_HANDLER = new MarkObjectActionHandler() {
     @Override
     public boolean isMarked(@NotNull Project project, @NotNull AnActionEvent event) {
@@ -228,6 +227,7 @@ public abstract class DebuggerSupport {
     }
   };
 
+  @ApiStatus.Internal
   public @NotNull MarkObjectActionHandler getMarkObjectHandler() {
     return DISABLED_MARK_HANDLER;
   }

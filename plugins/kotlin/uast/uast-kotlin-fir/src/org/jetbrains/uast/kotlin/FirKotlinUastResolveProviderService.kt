@@ -26,6 +26,9 @@ import org.jetbrains.kotlin.name.SpecialNames
 import org.jetbrains.kotlin.name.StandardClassIds
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.parents
+import org.jetbrains.kotlin.utils.exceptions.errorWithAttachment
+import org.jetbrains.kotlin.utils.exceptions.withPsiEntry
+import org.jetbrains.kotlin.utils.yieldIfNotNull
 import org.jetbrains.uast.*
 import org.jetbrains.uast.analysis.KotlinExtensionConstants.LAMBDA_THIS_PARAMETER_NAME
 import org.jetbrains.uast.kotlin.internal.*
@@ -132,47 +135,51 @@ interface FirKotlinUastResolveProviderService : BaseKotlinUastResolveProviderSer
     ): List<KotlinUParameter> {
         analyzeForUast(ktLambdaExpression) {
             val anonymousFunctionSymbol = ktLambdaExpression.functionLiteral.symbol
+            val anonymousFunctionSymbolPtr = anonymousFunctionSymbol.createPointer()
             val parameters = mutableListOf<KotlinUParameter>()
             if (includeExplicitParameters && anonymousFunctionSymbol.receiverParameter != null) {
-                val lambdaImplicitReceiverType = anonymousFunctionSymbol.receiverParameter!!.type.asPsiType(
-                    ktLambdaExpression,
-                    allowErrorTypes = false,
-                    KaTypeMappingMode.DEFAULT_UAST,
-                    isAnnotationMethod = false
-                ) ?: UastErrorType
                 parameters.add(
                     KotlinUParameter(
                         UastKotlinPsiParameterBase(
                             name = LAMBDA_THIS_PARAMETER_NAME,
-                            type = lambdaImplicitReceiverType,
                             parent = ktLambdaExpression,
                             ktOrigin = ktLambdaExpression,
-                            language = ktLambdaExpression.language,
                             isVarArgs = false,
                             ktDefaultValue = null
-                        ),
+                        ) {
+                            analyzeForUast(ktLambdaExpression) {
+                                anonymousFunctionSymbolPtr.restoreSymbol()?.receiverParameter?.returnType?.asPsiType(
+                                    ktLambdaExpression,
+                                    allowErrorTypes = false,
+                                    KaTypeMappingMode.DEFAULT_UAST,
+                                    isAnnotationMethod = false
+                                ) ?: UastErrorType
+                            }
+                          },
                         sourcePsi = null,
                         parent
                     )
                 )
             }
-            anonymousFunctionSymbol.valueParameters.mapTo(parameters) { p ->
-                val psiType = p.returnType.asPsiType(
-                    ktLambdaExpression,
-                    allowErrorTypes = false,
-                    KaTypeMappingMode.DEFAULT_UAST,
-                    isAnnotationMethod = false
-                ) ?: UastErrorType
+            anonymousFunctionSymbol.valueParameters.mapTo(parameters) { paramSymbol ->
+                val paramSymbolPtr = paramSymbol.createPointer()
                 KotlinUParameter(
                     UastKotlinPsiParameterBase(
-                        name = p.name.asString(),
-                        type = psiType,
+                        name = paramSymbol.name.asString(),
                         parent = ktLambdaExpression,
                         ktOrigin = ktLambdaExpression,
-                        language = ktLambdaExpression.language,
-                        isVarArgs = p.isVararg,
+                        isVarArgs = paramSymbol.isVararg,
                         ktDefaultValue = null
-                    ),
+                    ) {
+                        analyzeForUast(ktLambdaExpression) {
+                            paramSymbolPtr.restoreSymbol()?.returnType?.asPsiType(
+                                ktLambdaExpression,
+                                allowErrorTypes = false,
+                                KaTypeMappingMode.DEFAULT_UAST,
+                                isAnnotationMethod = false
+                            ) ?: UastErrorType
+                        }
+                    },
                     null,
                     parent
                 )
@@ -219,14 +226,14 @@ interface FirKotlinUastResolveProviderService : BaseKotlinUastResolveProviderSer
         if (candidates.isEmpty()) return emptySequence()
         return sequence {
             candidates.forEach { candidatePointer ->
-                analyzeForUast(ktExpression) {
+                val psi = analyzeForUast(ktExpression) {
                     val candidate = candidatePointer.restoreSymbol() ?: return@forEach
-                    val psi = when (candidate) {
+                    when (candidate) {
                         is KaVariableSymbol -> psiForUast(candidate)
                         is KaFunctionSymbol -> toPsiMethod(candidate, ktExpression)
-                    }?: return@forEach
-                    yield(psi)
+                    }
                 }
+                yieldIfNotNull(psi)
             }
         }
     }
@@ -323,6 +330,14 @@ interface FirKotlinUastResolveProviderService : BaseKotlinUastResolveProviderSer
     }
 
     override fun callKind(ktCallElement: KtCallElement): UastCallKind {
+        when (ktCallElement) {
+            is KtSuperTypeCallEntry, is KtAnnotationEntry, is KtConstructorDelegationCall -> return UastCallKind.CONSTRUCTOR_CALL
+            is KtCallExpression -> {}
+            else -> errorWithAttachment("Unexpected element: ${ktCallElement::class.simpleName}") {
+                withPsiEntry("callElement", ktCallElement)
+            }
+        }
+
         analyzeForUast(ktCallElement) {
             val resolvedFunctionLikeSymbol =
                 ktCallElement.resolveToCall()?.singleFunctionCallOrNull()?.symbol ?: return UastCallKind.METHOD_CALL
@@ -549,6 +564,12 @@ interface FirKotlinUastResolveProviderService : BaseKotlinUastResolveProviderSer
                         lambda?.parameters?.firstOrNull()?.javaPsi?.let { return it }
                     }
                 }
+
+                is KtNamedFunction -> {
+                    if (resolvedTargetSymbol is KaFunctionSymbol) {
+                        toPsiMethod(resolvedTargetSymbol, ktExpression)?.let { return it }
+                    }
+                }
             }
 
             // TODO: need to handle resolved target to library source
@@ -642,7 +663,7 @@ interface FirKotlinUastResolveProviderService : BaseKotlinUastResolveProviderSer
             return null
 
         analyzeForUast(ktExpression) {
-            val ktType = ktExpression.expressionType ?: return null
+            val ktType = ktExpression.expressionType.takeUnless { it is KaErrorType } ?: return null
             // Again, Analysis API returns [Unit] for statements, so we need to filter out
             // some cases that are not actually expression's return type.
             if (ktType.isUnitType) {

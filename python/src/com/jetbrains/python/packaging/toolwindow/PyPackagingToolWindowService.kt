@@ -122,6 +122,9 @@ class PyPackagingToolWindowService(val project: Project, val serviceScope: Corou
   }
 
   internal suspend fun initForSdk(sdk: Sdk?) {
+    if (sdk == null) {
+      toolWindowPanel?.packageListController?.setLoadingState(false)
+    }
     if (sdk == currentSdk)
       return
 
@@ -137,10 +140,6 @@ class PyPackagingToolWindowService(val project: Project, val serviceScope: Corou
     manager.repositoryManager.initCaches()
     manager.reloadPackages()
 
-    if (currentSdk != null && currentSdk != previousSdk) {
-
-
-    }
     withContext(Dispatchers.Main) {
       toolWindowPanel?.contentVisible = currentSdk != null
       if (currentSdk == null || currentSdk != previousSdk) {
@@ -337,10 +336,6 @@ class PyPackagingToolWindowService(val project: Project, val serviceScope: Corou
       .take(PACKAGES_LIMIT)
       .map { pkg -> installedPackages.values.find { it.name.lowercase() == pkg.lowercase() } ?: InstallablePackage(pkg, repository) }
       .toList()
-  }
-
-  internal suspend fun moduleAttached() {
-    toolWindowPanel?.recreateModulePanel()
   }
 
   companion object {

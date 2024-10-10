@@ -38,10 +38,10 @@
   </xi:include>
 
   <extensions defaultExtensionNs="org.jetbrains.kotlin">
-
-    <supportAvailability implementation="org.jetbrains.kotlin.idea.highlighter.ScriptingSupportAvailability"/>
-
     <scriptAdditionalIdeaDependenciesProvider implementation="org.jetbrains.kotlin.idea.core.script.ModuleScriptAdditionalIdeaDependenciesProvider"/>
+
+    <bundledFirCompilerPluginProvider implementation="org.jetbrains.kotlin.idea.fir.extensions.DefaultBundledFirCompilerPluginProvider"
+                                      order="first"/>
   </extensions>
 
   <extensions defaultExtensionNs="org.jetbrains.uast">
@@ -51,6 +51,11 @@
   </extensions>
 
   <extensions defaultExtensionNs="com.intellij">
+    <resolveScopeEnlarger implementation="org.jetbrains.kotlin.idea.base.analysis.builtins.KotlinBuiltInsResolveScopeEnlarger" />
+
+    <applicationActivity implementation="org.jetbrains.kotlin.idea.base.plugin.K2UnsupportedPluginsNotificationActivity"/>
+    <notificationGroup id="Plugins Incompatible With Kotlin Plugin in K2 Mode" displayType="BALLOON" bundle="messages.KotlinBasePluginBundle" key="plugins.incompatible.with.k2.title"/>
+
     <lang.parserDefinition language="kotlin" implementationClass="org.jetbrains.kotlin.idea.base.analysisApiPlatform.IDEKotlinK2KotlinParserDefinition"/>
 
     <projectService serviceInterface="org.jetbrains.kotlin.analysis.api.platform.projectStructure.KotlinCompilerPluginsProvider"
@@ -76,11 +81,6 @@
                  description="Whether to convert `KtStringTemplateExpression` to `KotlinStringTemplateUPolyadicExpression` in all cases"
                  defaultValue="true"
                  restartRequired="false"/>
-
-    <registryKey key="kotlin.k2.scripting.enabled"
-                 description="Enable scripting support in the K2 mode"
-                 defaultValue="true"
-                 restartRequired="true"/>
 
     <registryKey key="kotlin.k2.only.bundled.compiler.plugins.enabled"
                  description="Allow only bundled K2 compiler plugins to be used"

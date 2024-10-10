@@ -1,7 +1,8 @@
 // Copyright 2000-2023 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-package org.jetbrains.kotlin.onboarding
+package onboarding
 
 import com.intellij.internal.statistic.DeviceIdManager
+import org.jetbrains.kotlin.onboarding.KotlinNewUserTracker
 import org.jetbrains.kotlin.onboarding.KotlinNewUserTracker.Companion.NEW_IDEA_USER_DURATION
 import org.jetbrains.kotlin.onboarding.KotlinNewUserTracker.Companion.NEW_USER_DURATION
 import org.jetbrains.kotlin.onboarding.KotlinNewUserTracker.Companion.NEW_USER_RESET
@@ -11,17 +12,22 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.util.*
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
+import kotlin.test.*
 
 class KotlinNewUserTrackerTest {
     private val now = Instant.now()
+    private val today = LocalDate.now()
 
     private fun Long.isRecentEpochTimestamp(): Boolean {
         return Duration.between(Instant.ofEpochSecond(this), Instant.now()) < Duration.ofSeconds(30)
     }
+
+    private fun LocalDate.daysSinceDate(): Int {
+        return ChronoUnit.DAYS.between(this, today).toInt()
+    }
+
 
     private fun createInstance(
         installationDate: LocalDate? = LocalDate.now().minusDays(NEW_IDEA_USER_DURATION.toDays() + 1)
@@ -43,6 +49,7 @@ class KotlinNewUserTrackerTest {
         assertTrue(instance.state.firstKtFileOpened == 0L)
         assertTrue(instance.state.newKtUserSince == 0L)
         assertTrue(instance.state.firstKtFileOpened == 0L)
+        assertNull(instance.getFirstKotlinUsageDate())
     }
 
     @Test
@@ -53,6 +60,9 @@ class KotlinNewUserTrackerTest {
         assertTrue(instance.state.lastKtFileOpened.isRecentEpochTimestamp())
         assertTrue(instance.isNewKtUser())
         assertFalse(instance.shouldShowNewUserDialog())
+        assertNotNull(instance.getFirstKotlinUsageDate())
+        // We are very careful and check <= 1 here in case the test changes over at that time, which is almost never going to happen
+        assertTrue(instance.getFirstKotlinUsageDate()!!.daysSinceDate() <= 1)
     }
 
     @Test
@@ -63,6 +73,7 @@ class KotlinNewUserTrackerTest {
         assertTrue(instance.state.lastKtFileOpened.isRecentEpochTimestamp())
         assertTrue(instance.isNewKtUser())
         assertFalse(instance.shouldShowNewUserDialog())
+        assertTrue(instance.getFirstKotlinUsageDate()!!.daysSinceDate() <= 1)
     }
 
     @Test
@@ -84,6 +95,7 @@ class KotlinNewUserTrackerTest {
         assertTrue(instance.isNewKtUser())
         // User has not passed the new user period
         assertFalse(instance.shouldShowNewUserDialog())
+        assertTrue(instance.getFirstKotlinUsageDate()!!.daysSinceDate() <= 1)
     }
 
     @Test
@@ -91,6 +103,8 @@ class KotlinNewUserTrackerTest {
         val instance = createInstance()
         instance.state.newKtUserSince = (now - NEW_USER_SURVEY_DELAY + Duration.ofHours(1)).epochSecond
         assertFalse(instance.shouldShowNewUserDialog())
+        val newUserDays = NEW_USER_SURVEY_DELAY.toDays()
+        assertTrue(instance.getFirstKotlinUsageDate()!!.daysSinceDate() in (newUserDays - 1..newUserDays + 1))
     }
 
     @Test

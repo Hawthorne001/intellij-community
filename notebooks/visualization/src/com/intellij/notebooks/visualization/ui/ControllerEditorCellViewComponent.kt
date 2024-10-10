@@ -14,19 +14,25 @@ class ControllerEditorCellViewComponent(
   internal val controller: NotebookCellInlayController,
   private val editor: Editor,
   private val cell: EditorCell,
-) : EditorCellViewComponent(), HasGutterIcon {
-
+) : EditorCellViewComponent() {
 
   private var foldedRegion: FoldRegion? = null
 
-  override fun updateGutterIcons(gutterAction: AnAction?) {
+  private fun updateGutterIcons(gutterAction: AnAction?) {
     val inlay = controller.inlay
-    inlay.putUserData(NotebookCellInlayController.GUTTER_ACTION_KEY, gutterAction)
     inlay.update()
   }
 
-  override fun doDispose() {
-    controller.let { controller -> Disposer.dispose(controller.inlay) }
+  init {
+    cell.gutterAction.afterChange(this) { action ->
+      updateGutterIcons(action)
+    }
+    updateGutterIcons(cell.gutterAction.get())
+  }
+
+  override fun dispose() {
+    super.dispose()
+    Disposer.dispose(controller.inlay)
     disposeFolding()
   }
 
@@ -47,7 +53,7 @@ class ControllerEditorCellViewComponent(
   }
 
   override fun updateCellFolding(updateContext: UpdateContext) {
-    updateContext.addFoldingOperation {
+    updateContext.addFoldingOperation { foldingModel ->
       val doc = editor.document
       val interval = cell.interval
 
@@ -56,7 +62,6 @@ class ControllerEditorCellViewComponent(
 
       //Configure folding
       val regionToFold = IntRange(cellContentStart, cellEnd)
-      val foldingModel = editor.foldingModel as FoldingModelEx
 
       if (foldedRegion != null) {
         disposeFolding()

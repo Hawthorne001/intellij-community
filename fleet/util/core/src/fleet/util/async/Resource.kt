@@ -3,12 +3,11 @@
 
 package fleet.util.async
 
+import fleet.tracing.SpanInfoBuilder
 import fleet.tracing.spannedScope
 import kotlinx.coroutines.*
 import java.lang.RuntimeException
 import kotlin.coroutines.CoroutineContext
-
-typealias Consumer<T> = suspend (T) -> Unit
 
 /**
  * Something backed by a coroutine tree.
@@ -49,9 +48,12 @@ interface Resource<out T> {
 }
 
 /**
- * @see [Resource]
+ * Main [Resource] constructor.
+ * [producer] must invoke consumer with the resource instance.
+ * return type [Consumed], can only be constructed from consumer invocation.
+ * [Consumed] is used as a proof of invocation to prevent accidental null-punning and consequent leaked coroutines
  * */
-fun <T> resource(producer: suspend CoroutineScope.(Consumer<T>) -> Unit): Resource<T> =
+fun <T> resource(producer: suspend CoroutineScope.(consumer: Consumer<T>) -> Consumed): Resource<T> =
   object : Resource<T> {
     override suspend fun <U> use(body: suspend CoroutineScope.(T) -> U): U =
       coroutineScope {
@@ -62,6 +64,7 @@ fun <T> resource(producer: suspend CoroutineScope.(Consumer<T>) -> Unit): Resour
           producer { t ->
             check(deferred.complete(t)) { "Double emission" }
             shutdown.join()
+            Proof
           }
         }.invokeOnCompletion { cause ->
           deferred.completeExceptionally(cause ?: RuntimeException("Resource didn't emit"))
@@ -69,6 +72,15 @@ fun <T> resource(producer: suspend CoroutineScope.(Consumer<T>) -> Unit): Resour
         coroutineScope { body(deferred.await()) }.also { shutdown.complete() }
       }
   }
+
+/**
+ * A proof that a consumer is invoked
+ * */
+sealed interface Consumed
+
+internal data object Proof: Consumed
+
+typealias Consumer<T> = suspend (T) -> Consumed
 
 fun <T> resourceOf(value: T): Resource<T> =
   object : Resource<T> {
@@ -109,6 +121,17 @@ fun <T> Resource<Deferred<T>>.track(displayName: String): Resource<Deferred<T>> 
             body(t.track(displayName))
           }
         }
+    }
+  }
+
+fun <T> Resource<T>.span(name: String, info: SpanInfoBuilder.() -> Unit = {}): Resource<T> =
+  let { source ->
+    resource { cc ->
+      spannedScope(name, info) {
+        source.use { t ->
+          cc(t)
+        }
+      }
     }
   }
 
@@ -171,3 +194,17 @@ fun <T> Deferred<T>.track(displayName: String): Deferred<T> =
         }
     }
   }
+
+@OptIn(ExperimentalCoroutinesApi::class)
+fun <T> Resource<T>.useOn(coroutineScope: CoroutineScope): Deferred<T> {
+  val deferred = CompletableDeferred<T>()
+  coroutineScope.launch(start = CoroutineStart.ATOMIC) {
+    use { t ->
+      deferred.complete(t)
+      awaitCancellation()
+    }
+  }.invokeOnCompletion { x ->
+    deferred.completeExceptionally(x ?: RuntimeException("Resource did not start"))
+  }
+  return deferred
+}

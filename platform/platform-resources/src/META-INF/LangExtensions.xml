@@ -56,7 +56,6 @@
     <vfs.asyncListener implementation="com.intellij.util.indexing.events.ChangedFilesCollector"/>
     <applicationInitializedListener implementation="com.intellij.util.indexing.FileBasedIndexLoader" order="first"/>
     <applicationService serviceImplementation="com.intellij.util.indexing.diagnostic.IndexDiagnosticDumper" preload="notLightEdit"/>
-    <applicationService serviceImplementation="com.intellij.util.indexing.roots.ModuleIndexableFilesPolicy"/>
 
     <applicationService serviceInterface="com.intellij.openapi.application.PathMacros"
                         serviceImplementation="com.intellij.ide.macro.IdePathMacros"/>
@@ -363,8 +362,8 @@
     <applicationService serviceInterface="com.intellij.openapi.module.ModuleTypeManager"
                         serviceImplementation="com.intellij.openapi.module.impl.ModuleTypeManagerImpl"/>
 
-    <projectService serviceInterface="com.intellij.ai.InlinePromptManager"
-                    serviceImplementation="com.intellij.ai.EmptyInlinePromptManager"/>
+    <projectService serviceInterface="com.intellij.inlinePrompt.InlinePromptManager"
+                    serviceImplementation="com.intellij.inlinePrompt.EmptyInlinePromptManager"/>
 
     <applicationService
       serviceImplementation="com.intellij.openapi.roots.ui.configuration.actions.ModuleDeleteProvider"/>
@@ -594,7 +593,7 @@
                              bundle="messages.IdeBundle"/>
 
     <!-- External Tools -->
-    <applicationConfigurable groupId="tools" groupWeight="140" instance="com.intellij.tools.ToolConfigurable" id="preferences.externalTools"
+    <applicationConfigurable groupId="tools" instance="com.intellij.tools.ToolConfigurable" id="preferences.externalTools"
                              key="tools.settings.title"
                              bundle="messages.ToolsBundle"/>
     <stepsBeforeRunProvider implementation="com.intellij.tools.ToolBeforeRunTaskProvider"/>
@@ -686,6 +685,10 @@
 
     <syntaxHighlighter factoryClass="com.intellij.openapi.fileTypes.LanguageFileTypeHighlighterProvider"/>
     <structureViewBuilder factoryClass="com.intellij.ide.highlighter.LanguageFileTypeStructureViewBuilderProvider"/>
+    <registryKey key="logical.structure.enabled"
+                 description="Show logical structure in Structure View"
+                 defaultValue="true"
+                 restartRequired="false"/>
 
     <idIndexer filetype="PLAIN_TEXT" implementationClass="com.intellij.psi.impl.cache.impl.id.PlainTextIdIndexer"/>
     <todoIndexer filetype="PLAIN_TEXT" implementationClass="com.intellij.psi.impl.cache.impl.todo.PlainTextTodoIndexer"/>
@@ -787,6 +790,9 @@
 
     <findUsagesHandlerFactory implementation="com.intellij.find.findUsages.DefaultFindUsagesHandlerFactory" id="default" order="last"/>
     <usageTargetProvider implementation="com.intellij.find.findUsages.DefaultUsageTargetProvider" id="default" order="last"/>
+    <registryKey defaultValue="false"
+                 description="If enabled, the Show Usages popup will always use the last size and won't try to be smart about it"
+                 key="find.usages.disable.smart.size" />
 
     <cutElementMarker implementation="com.intellij.ide.PsiCutElementMarker"/>
 
@@ -1038,6 +1044,8 @@
     <applicationService serviceImplementation="com.intellij.ide.projectView.impl.ProjectViewSharedSettings"/>
     <projectService serviceInterface="com.intellij.ide.projectView.ProjectView"
                     serviceImplementation="com.intellij.ide.projectView.impl.ProjectViewImpl"/>
+    <registryKey defaultValue="false" key="ide.project.view.coroutines" restartRequired="true"
+                 description="Use the new experimental coroutine-based Project View implementation"/>
     <pathMacroFilter implementation="com.intellij.ide.projectView.impl.ProjectViewPathMacroFilter"/>
     <projectService serviceImplementation="com.intellij.ide.projectView.impl.ProjectViewState"/>
     <projectService serviceInterface="com.intellij.execution.ui.RunnerLayoutUi$Factory"
@@ -1513,6 +1521,8 @@
     <searchEverywhereResultsEqualityProvider implementation="com.intellij.ide.actions.searcheverywhere.ActionsEqualityProvider"/>
     <searchEverywhereResultsEqualityProvider implementation="com.intellij.ide.actions.searcheverywhere.OptionEqualityProvider"/>
 
+    <searchEverywherePreviewPrimaryUsageFinder id="base" implementation="com.intellij.ide.actions.searcheverywhere.PreviewPrimaryUsageFinderImpl"/>
+
     <applicationService serviceInterface="com.intellij.ide.actions.searcheverywhere.remote.SearchEverywhereRemoteSupportService"
                         serviceImplementation="com.intellij.ide.actions.searcheverywhere.SearchEverywhereRemoteSupportServiceImpl"/>
 
@@ -1580,7 +1590,7 @@
     <editorActionHandler
       id="inline.completion.backspace" action="EditorBackSpace"
       implementationClass="com.intellij.codeInsight.inline.completion.BackSpaceInlineCompletionHandler"
-      order="before hide-hints"/>
+      order="first"/>
     <editorFactoryListener implementation="com.intellij.codeInsight.inline.completion.listeners.InlineCompletionEditorListener"/>
     <actionPromoter id="InlineCompletionPromoter"
                     implementation="com.intellij.codeInsight.inline.completion.InlineCompletionActionsPromoter"
@@ -1668,8 +1678,6 @@
     <notificationGroup id="Power Save Mode" displayType="BALLOON" bundle="messages.IdeBundle" key="notification.group.power.save.mode"/>
     <notificationGroup id="Essential Highlighting Mode" displayType="BALLOON" bundle="messages.IdeBundle" key="notification.group.essential-highlighting.mode"/>
     <notificationGroup id="IDE Caches" displayType="BALLOON" bundle="messages.IndexingBundle" key="notification.group.ide.caches"/>
-    <notificationGroup id="VFS" displayType="BALLOON" bundle="messages.IdeBundle"
-                       key="notification.group.vfs"/>
     <notificationGroup id="Cache Recovery" displayType="STICKY_BALLOON" bundle="messages.IdeBundle"
                        key="notification.group.cache.recovery"/>
     <notificationGroup id="Framework Detection" displayType="BALLOON" bundle="messages.ProjectBundle"
@@ -1787,6 +1795,7 @@
     <listener class="com.intellij.util.indexing.FileBasedIndexPluginListener" topic="com.intellij.ide.plugins.DynamicPluginListener"/>
     <listener topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"
               class="com.intellij.codeInsight.daemon.impl.EditorTrackerImpl$MyAppLevelFileEditorManagerListener"/>
+    <listener class="com.intellij.codeInsight.hints.codeVision.CodeVisionPluginListener" topic="com.intellij.ide.plugins.DynamicPluginListener"/>
 
     <listener class="com.intellij.ide.projectView.impl.ProjectViewImpl$MyToolWindowManagerListener"
               topic="com.intellij.openapi.wm.ex.ToolWindowManagerListener"/>

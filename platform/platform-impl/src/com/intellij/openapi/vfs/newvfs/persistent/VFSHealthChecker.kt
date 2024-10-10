@@ -1,4 +1,6 @@
 // Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+@file:ApiStatus.Internal
+
 package com.intellij.openapi.vfs.newvfs.persistent
 
 import com.intellij.ide.ApplicationActivity
@@ -10,6 +12,7 @@ import com.intellij.openapi.diagnostic.IdeaLogRecordFormatter
 import com.intellij.openapi.diagnostic.JulLogger
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.extensions.ExtensionNotApplicableException
+import com.intellij.openapi.progress.runBlockingCancellable
 import com.intellij.openapi.vfs.newvfs.monitoring.VfsUsageCollector
 import com.intellij.openapi.vfs.newvfs.persistent.PersistentFS.Flags.CHILDREN_CACHED
 import com.intellij.openapi.vfs.newvfs.persistent.PersistentFS.Flags.IS_DIRECTORY
@@ -31,6 +34,7 @@ import it.unimi.dsi.fastutil.ints.IntOpenHashSet
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.take
+import org.jetbrains.annotations.ApiStatus
 import java.nio.file.Paths
 import java.util.logging.ConsoleHandler
 import java.util.logging.Level
@@ -193,6 +197,7 @@ private class VFSHealthCheckServiceStarter : ApplicationActivity {
  * Performs VFS self-consistency checks.
  * E.g. fields have reasonable values, all the references (ids) are valid and could be resolved, and so on.
  */
+@ApiStatus.Internal
 class VFSHealthChecker(private val impl: FSRecordsImpl,
                        private val log: Logger = LOG) {
 
@@ -224,9 +229,9 @@ class VFSHealthChecker(private val impl: FSRecordsImpl,
 
   private suspend fun verifyFileRecords(checkForOrphanRecords: Boolean): VFSHealthCheckReport.FileRecordsReport {
     val connection = impl.connection()
-    val fileRecords = connection.records
-    val namesEnumerator = connection.names
-    val contentsStorage = connection.contents
+    val fileRecords = connection.records()
+    val namesEnumerator = connection.names()
+    val contentsStorage = connection.contents()
 
     val maxAllocatedID = fileRecords.maxAllocatedID()
 
@@ -272,7 +277,7 @@ class VFSHealthChecker(private val impl: FSRecordsImpl,
 
             var attributesAreResolvable: Boolean
             try {
-              connection.attributes.checkAttributeRecordSanity(fileId, attributeRecordId)
+              connection.attributes().checkAttributeRecordSanity(fileId, attributeRecordId)
               attributesAreResolvable = true
             }
             catch (t: Throwable) {
@@ -409,7 +414,7 @@ class VFSHealthChecker(private val impl: FSRecordsImpl,
       try {
         readAction {
           val rootIds = impl.treeAccessor().listRoots()
-          val records = impl.connection().records
+          val records = impl.connection().records()
           val maxAllocatedID = records.maxAllocatedID()
           rootsCount = rootIds.size
 
@@ -440,7 +445,7 @@ class VFSHealthChecker(private val impl: FSRecordsImpl,
   }
 
   private fun verifyNamesEnumerator(): VFSHealthCheckReport.NamesEnumeratorReport {
-    val namesEnumerator = impl.connection().names
+    val namesEnumerator = impl.connection().names()
     val report = VFSHealthCheckReport.NamesEnumeratorReport()
     try {
       namesEnumerator.forEach { id, name ->
@@ -480,7 +485,7 @@ class VFSHealthChecker(private val impl: FSRecordsImpl,
     val report = VFSHealthCheckReport.ContentEnumeratorReport(0, 0)
 
     val connection = impl.connection()
-    val contentsStorage = connection.contents
+    val contentsStorage = connection.contents()
     val contentRecordsIterator = contentsStorage.createRecordIdIterator()
     while (contentRecordsIterator.hasNextId()) {
       report.contentRecordsChecked ++
@@ -666,7 +671,7 @@ fun main(args: Array<String>) {
   }
 
   val log = configureLogger()
-  runBlocking {
+  runBlockingCancellable {
     val checkupReport = VFSHealthChecker(records, log).checkHealth(checkForOrphanRecords = true)
     println(checkupReport)
   }

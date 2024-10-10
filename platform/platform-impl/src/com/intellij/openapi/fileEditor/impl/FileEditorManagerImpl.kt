@@ -836,7 +836,7 @@ open class FileEditorManagerImpl(
             .filter { it != mainSplitters }
             .flatMap { sequenceOfNotNull(it.currentWindow) /* check current first */ + it.windows() }
             .mapNotNull {
-              val composite = it.getComposite(file) ?: return@mapNotNull  null
+              val composite = it.getComposite(file) ?: return@mapNotNull null
               it to composite
             }
             .firstOrNull()
@@ -873,17 +873,11 @@ open class FileEditorManagerImpl(
     }
 
     if (windowToOpenIn == null) {
-      if (options.reuseOpen || !AdvancedSettings.getBoolean(EDITOR_OPEN_INACTIVE_SPLITTER)) {
-        windowToOpenIn = findWindowInAllSplitters(file)
-        if (windowToOpenIn != null && forbidSplitFor(file = file) && !windowToOpenIn.isFileOpen(file)) {
-          closeFile(file)
-        }
-      }
-      if (windowToOpenIn == null) {
-        windowToOpenIn = getOrCreateCurrentWindow(file)
-      }
+      windowToOpenIn = getWindowToOpen(options, file)
     }
-
+    if (forbidSplitFor(file = file) && !windowToOpenIn.isFileOpen(file)) {
+      closeFile(file)
+    }
     return openFileImpl(window = windowToOpenIn, _file = file, entry = null, options = options)
   }
 
@@ -927,11 +921,9 @@ open class FileEditorManagerImpl(
 
     val isCurrentlyUnderLocalId = ClientId.isCurrentlyUnderLocalId
 
-    val reuseOpen = options.reuseOpen || !AdvancedSettings.getBoolean(EDITOR_OPEN_INACTIVE_SPLITTER)
     var composite: FileEditorComposite? = withContext(Dispatchers.EDT) {
       writeIntentReadAction {
-        val existingWindow = if (reuseOpen) findWindowInAllSplitters(file) else null
-        val window = existingWindow ?: getOrCreateCurrentWindow(file)
+        val window = getWindowToOpen(options, file)
         if (forbidSplitFor(file) && !window.isFileOpen(file)) {
           closeFile(file)
         }
@@ -964,6 +956,22 @@ open class FileEditorManagerImpl(
     return composite
   }
 
+  private fun getWindowToOpen(
+    options: FileEditorOpenOptions,
+    file: VirtualFile,
+  ): EditorWindow {
+    val forceUseActiveSplitter = !AdvancedSettings.getBoolean(EDITOR_OPEN_INACTIVE_SPLITTER)
+    val existingWindow = when {
+      forceUseActiveSplitter -> getActiveSplitterSync().currentWindow
+      options.reuseOpen -> findWindowInAllSplitters(file)
+      else -> null
+    }
+    if (existingWindow != null && !isSingletonDockWindow(existingWindow)) {
+      return existingWindow
+    }
+    return getOrCreateCurrentWindow(file)
+  }
+
   private fun findWindowInAllSplitters(file: VirtualFile): EditorWindow? {
     val activeCurrentWindow = getActiveSplitterSync().currentWindow
     if (activeCurrentWindow != null && isFileOpenInWindow(file, activeCurrentWindow)) {
@@ -973,11 +981,7 @@ open class FileEditorManagerImpl(
     for (splitters in getAllSplitters()) {
       for (window in splitters.windows()) {
         if (isFileOpenInWindow(file, window)) {
-          if (AdvancedSettings.getBoolean(EDITOR_OPEN_INACTIVE_SPLITTER)) {
-            return window
-          }
-          // return a window from here so that we don't look for it again in getOrCreateCurrentWindow
-          return activeCurrentWindow
+          return window
         }
       }
     }
@@ -1089,6 +1093,7 @@ open class FileEditorManagerImpl(
    * This method can be invoked from background thread. Of course, UI for returned editors should be accessed from EDT in any case.
    */
   @Suppress("DuplicatedCode")
+  @JvmName("openFileImpl")
   internal fun openFileImpl(
     window: EditorWindow,
     @Suppress("LocalVariableName") _file: VirtualFile,
@@ -1144,7 +1149,7 @@ open class FileEditorManagerImpl(
         val composite = withContext(Dispatchers.EDT) {
           open()
         }
-        if ( composite is EditorComposite) {
+        if (composite is EditorComposite) {
           if (options.waitForCompositeOpen) {
             composite.waitForAvailable()
             if (composite.providerSequence.none()) {
@@ -1407,22 +1412,15 @@ open class FileEditorManagerImpl(
       openMode = getOpenMode(IdeEventQueue.getInstance().trueCurrentEvent),
     )
 
-    val fileEditors = openFile(file = file, window = null, options = openOptions).allEditors
+    val composite: FileEditorComposite = openFile(file = file, window = null, options = openOptions)
+    val fileEditors = composite.allEditors
 
-    val currentCompositeForFile = getComposite(file)
-    for (editor in fileEditors) {
-      // try to navigate opened editor
-      if (editor is NavigatableFileEditor && currentCompositeForFile?.selectedWithProvider?.fileEditor === editor &&
-          navigateAndSelectEditor(editor, effectiveDescriptor, currentCompositeForFile)) {
-        return fileEditors to editor
-      }
-    }
-
-    for (editor in fileEditors) {
-      // try other editors
-      if (editor is NavigatableFileEditor && currentCompositeForFile?.selectedWithProvider?.fileEditor !== editor &&
-          navigateAndSelectEditor(editor, effectiveDescriptor, currentCompositeForFile)) {
-        return fileEditors to editor
+    if (composite is EditorComposite) {
+      for (editor in fileEditors) {
+        if (editor is NavigatableFileEditor &&
+            navigateAndSelectEditor(editor, effectiveDescriptor, composite)) {
+          return fileEditors to editor
+        }
       }
     }
     return fileEditors to null
@@ -2024,10 +2022,12 @@ open class FileEditorManagerImpl(
       }
     }
 
-    override fun libraryRootsChanged(presentableLibraryName: @Nls String?,
-                                     oldRoots: Collection<VirtualFile>,
-                                     newRoots: Collection<VirtualFile>,
-                                     libraryNameForDebug: String) {
+    override fun libraryRootsChanged(
+      presentableLibraryName: @Nls String?,
+      oldRoots: Collection<VirtualFile>,
+      newRoots: Collection<VirtualFile>,
+      libraryNameForDebug: String,
+    ) {
       check(rootChangedRequests.tryEmit(Unit))
     }
   }
@@ -2131,7 +2131,7 @@ open class FileEditorManagerImpl(
     window: EditorWindow,
     requestFocus: Boolean,
     isLazyComposite: Boolean,
-    windowAdded: suspend () -> Unit
+    windowAdded: suspend () -> Unit,
   ) {
     if (items.isEmpty()) {
       LOG.warn("no files to reopen")
@@ -2373,11 +2373,8 @@ private fun reopenVirtualFileInEditor(editorManager: FileEditorManagerEx, window
   val pinned = window.isFilePinned(oldFile)
   var newOptions = FileEditorOpenOptions(selectAsCurrent = active, requestFocus = active, pin = pinned)
 
-  val isSingletonEditor = window.composites().any { composite ->
-    composite.allEditors.any { it.file == oldFile && isSingletonFileEditor(it) }
-  }
-  val dockContainer = DockManager.getInstance(editorManager.project).getContainerFor(window.component) { it is DockableEditorTabbedContainer }
-  if (isSingletonEditor && dockContainer != null) {
+  val isSingletonEditor = isSingletonDockWindow(window) && window.isFileOpen(oldFile)
+  if (isSingletonEditor) {
     window.closeFile(oldFile)
     editorManager.openFile(newFile, window, newOptions.copy(openMode = FileEditorManagerImpl.OpenMode.NEW_WINDOW))
   }
@@ -2454,6 +2451,17 @@ private suspend fun updateFileNames(allSplitters: Set<EditorsSplitters>, file: V
 }
 
 internal fun isSingletonFileEditor(fileEditor: FileEditor?): Boolean = FileEditorManagerKeys.SINGLETON_EDITOR_IN_WINDOW.get(fileEditor, false)
+
+private fun isSingletonDockWindow(window: EditorWindow): Boolean {
+  if (getWindowDockContainer(window) == null) return false
+  return window.tabCount == 1 && window.composites().all { composite ->
+    composite.allEditors.any { isSingletonFileEditor(it) }
+  }
+}
+
+private fun getWindowDockContainer(window: EditorWindow): DockContainer? {
+  return DockManager.getInstance(window.manager.project).getContainerFor(window.component) { it is DockableEditorTabbedContainer }
+}
 
 @Internal
 fun getForegroundColorForFile(project: Project, file: VirtualFile): ColorKey? {

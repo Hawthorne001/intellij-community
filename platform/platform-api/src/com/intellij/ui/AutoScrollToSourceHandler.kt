@@ -12,8 +12,8 @@ import com.intellij.openapi.fileTypes.INativeFileType
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.util.NlsActions
 import com.intellij.openapi.util.registry.Registry
-import com.intellij.openapi.vfs.PersistentFSConstants
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.isTooLargeForIntellijSense
 import com.intellij.util.Alarm
 import com.intellij.util.SingleAlarm
 import com.intellij.util.concurrency.annotations.RequiresEdt
@@ -32,21 +32,28 @@ abstract class AutoScrollToSourceHandler {
   private var scheduledNavigationData: WeakReference<Component>? = null
 
   // access only from EDT
-  private val autoScrollAlarm = lazy(LazyThreadSafetyMode.NONE) {
-    SingleAlarm(
-      task = {
-        val component = scheduledNavigationData?.get() ?: return@SingleAlarm
-        scheduledNavigationData = null
-        // for tests
-        if (component.isShowing && (!needToCheckFocus() || UIUtil.hasFocus(component))) {
-          scrollToSource(component)
-        }
-      },
-      delay = Registry.intValue("ide.autoscroll.to.source.delay", 100),
-      parentDisposable = null,
-      threadToUse = Alarm.ThreadToUse.SWING_THREAD,
-      modalityState = ModalityState.defaultModalityState(),
-    )
+  private var autoScrollAlarm: SingleAlarm? = null 
+    
+  private fun getOrCreateAutoScrollAlarm(): SingleAlarm {
+    var alarm = autoScrollAlarm
+    if (alarm == null) {
+      alarm = SingleAlarm(
+        task = {
+          val component = scheduledNavigationData?.get() ?: return@SingleAlarm
+          scheduledNavigationData = null
+          // for tests
+          if (component.isShowing && (!needToCheckFocus() || UIUtil.hasFocus(component))) {
+            scrollToSource(component)
+          }
+        },
+        delay = Registry.intValue("ide.autoscroll.to.source.delay", 100),
+        parentDisposable = null,
+        threadToUse = Alarm.ThreadToUse.SWING_THREAD,
+        modalityState = ModalityState.defaultModalityState(),
+      )
+      autoScrollAlarm = alarm
+    }
+    return alarm
   }
 
   fun install(tree: JTree) {
@@ -114,9 +121,17 @@ abstract class AutoScrollToSourceHandler {
   }
 
   fun cancelAllRequests() {
-    if (autoScrollAlarm.isInitialized()) {
-      autoScrollAlarm.value.cancel()
-    }
+    autoScrollAlarm?.cancel()
+  }
+
+  /**
+   * Resets the internal instance to ensure that it'll be recreated properly if the component is reused in a different modal dialog.
+   * This is a temporary solution specifically for the Project Structure dialog, it's better to recreate components instead of reusing them.
+   */
+  @ApiStatus.Internal
+  @ApiStatus.Obsolete
+  fun resetAlarm() {
+    autoScrollAlarm = null
   }
 
   fun onMouseClicked(component: Component) {
@@ -129,7 +144,7 @@ abstract class AutoScrollToSourceHandler {
   private fun onSelectionChanged(component: Component?) {
     if (component != null && component.isShowing && isAutoScrollMode()) {
       scheduledNavigationData = WeakReference(component)
-      autoScrollAlarm.value.cancelAndRequest()
+      getOrCreateAutoScrollAlarm().cancelAndRequest()
     }
   }
 
@@ -160,7 +175,7 @@ abstract class AutoScrollToSourceHandler {
     }
 
     //IDEA-84881 Don't autoscroll to very large files
-    return file.length <= PersistentFSConstants.getMaxIntellisenseFileSize()
+    return !file.isTooLargeForIntellijSense()
   }
 
   @RequiresEdt

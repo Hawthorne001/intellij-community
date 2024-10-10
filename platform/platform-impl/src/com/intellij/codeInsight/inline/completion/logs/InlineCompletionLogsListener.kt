@@ -4,11 +4,15 @@ package com.intellij.codeInsight.inline.completion.logs
 import com.intellij.codeInsight.inline.completion.InlineCompletionEvent
 import com.intellij.codeInsight.inline.completion.InlineCompletionEventAdapter
 import com.intellij.codeInsight.inline.completion.InlineCompletionEventType
+import com.intellij.codeInsight.inline.completion.logs.FinishingLogs.FINAL_PROPOSAL_LENGTH
+import com.intellij.codeInsight.inline.completion.logs.FinishingLogs.FINAL_PROPOSAL_LINE
 import com.intellij.codeInsight.inline.completion.logs.FinishingLogs.FINISH_TYPE
 import com.intellij.codeInsight.inline.completion.logs.FinishingLogs.FULL_INSERT_ACTIONS
 import com.intellij.codeInsight.inline.completion.logs.FinishingLogs.INVALIDATION_EVENT
 import com.intellij.codeInsight.inline.completion.logs.FinishingLogs.NEXT_LINE_ACTIONS
 import com.intellij.codeInsight.inline.completion.logs.FinishingLogs.NEXT_WORD_ACTIONS
+import com.intellij.codeInsight.inline.completion.logs.FinishingLogs.RECEIVED_PROPOSAL_LENGTH
+import com.intellij.codeInsight.inline.completion.logs.FinishingLogs.RECEIVED_PROPOSAL_LINES
 import com.intellij.codeInsight.inline.completion.logs.FinishingLogs.SHOWING_TIME
 import com.intellij.codeInsight.inline.completion.logs.FinishingLogs.TIME_TO_START_SHOWING
 import com.intellij.codeInsight.inline.completion.logs.FinishingLogs.TOTAL_INSERTED_LENGTH
@@ -20,11 +24,13 @@ import com.intellij.codeInsight.inline.completion.logs.StartingLogs.INLINE_API_P
 import com.intellij.codeInsight.inline.completion.logs.StartingLogs.REQUEST_EVENT
 import com.intellij.codeInsight.inline.completion.logs.StartingLogs.REQUEST_ID
 import com.intellij.codeInsight.inline.completion.session.InlineCompletionContext
+import com.intellij.codeInsight.inline.completion.session.InlineCompletionInvalidationListener
 import com.intellij.internal.statistic.eventLog.events.EventFields
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.editor.Editor
 
-internal class InlineCompletionLogsListener(private val editor: Editor) : InlineCompletionEventAdapter {
+internal class InlineCompletionLogsListener(private val editor: Editor) : InlineCompletionEventAdapter,
+                                                                          InlineCompletionInvalidationListener {
   /**
    * This field is not thread-safe, please access it only on EDT.
    */
@@ -42,11 +48,14 @@ internal class InlineCompletionLogsListener(private val editor: Editor) : Inline
     var nextLineActions: Int = 0
     var totalInsertedLength: Int = 0
     var totalInsertedLines: Int = 0
+    var potentiallySelectedIndex: Int? = null
+    val variantStates = mutableMapOf<Int, VariantState>()
   }
 
 
   override fun onRequest(event: InlineCompletionEventType.Request) {
     holder = Holder()
+    holder.lastInvocationTimestamp = System.currentTimeMillis()
 
     val container = InlineCompletionLogsContainer.create(event.request.editor)
     container.add(REQUEST_ID with event.request.requestId)
@@ -60,12 +69,25 @@ internal class InlineCompletionLogsListener(private val editor: Editor) : Inline
     }
   }
 
+  override fun onComputed(event: InlineCompletionEventType.Computed) {
+    if (holder.potentiallySelectedIndex == null) {
+      holder.potentiallySelectedIndex = event.variantIndex // It's the first variant that will be shown to a user
+    }
+    val state = holder.variantStates.computeIfAbsent(event.variantIndex) { VariantState() }
+    state.initialSuggestion += event.element.text
+    state.finalSuggestion += event.element.text
+  }
+
   override fun onShow(event: InlineCompletionEventType.Show) {
     if (holder.wasShown) return
     holder.wasShown = true
     val container = InlineCompletionLogsContainer.get(editor) ?: return
     container.add(TIME_TO_START_SHOWING with (System.currentTimeMillis() - holder.lastInvocationTimestamp))
     holder.showStartTime = System.currentTimeMillis()
+  }
+
+  override fun onVariantSwitched(event: InlineCompletionEventType.VariantSwitched) {
+    holder.potentiallySelectedIndex = event.toVariantIndex
   }
 
   override fun onInsert(event: InlineCompletionEventType.Insert) {
@@ -87,26 +109,49 @@ internal class InlineCompletionLogsListener(private val editor: Editor) : Inline
         holder.nextLineActions++
       }
     }
+    val state = holder.variantStates[event.variantIndex]!!
+    state.finalSuggestion = event.elements.joinToString("") { it.text }
   }
 
-  override fun onInvalidated(event: InlineCompletionEventType.Invalidated) {
+  private fun onInvalidatedByEvent(eventClass: Class<out InlineCompletionEvent>) {
     val container = InlineCompletionLogsContainer.get(editor) ?: return
-    container.add(INVALIDATION_EVENT.with(event.event.javaClass))
+    container.add(INVALIDATION_EVENT.with(eventClass))
+  }
+
+  override fun onInvalidatedByEvent(event: InlineCompletionEvent) {
+    onInvalidatedByEvent(event.javaClass)
+  }
+
+  override fun onInvalidatedByUnclassifiedDocumentChange() {
+    onInvalidatedByEvent(InlineCompletionEvent.DocumentChange::class.java)
   }
 
   override fun onHide(event: InlineCompletionEventType.Hide) {
     val container = InlineCompletionLogsContainer.remove(editor) ?: return
     with(holder) {
-      container.add(WAS_SHOWN with wasShown)
-      container.add(SHOWING_TIME.with(System.currentTimeMillis() - showStartTime))
       container.add(FINISH_TYPE with event.finishType)
-      container.add(FULL_INSERT_ACTIONS with fullInsertActions)
-      container.add(NEXT_WORD_ACTIONS with nextWordActions)
-      container.add(NEXT_LINE_ACTIONS with nextLineActions)
-      container.add(TOTAL_INSERTED_LENGTH with totalInsertedLength)
-      container.add(TOTAL_INSERTED_LINES with totalInsertedLines)
+      container.add(WAS_SHOWN with wasShown)
+      if (wasShown) {
+        container.add(SHOWING_TIME.with(System.currentTimeMillis() - showStartTime))
+        container.add(FULL_INSERT_ACTIONS with fullInsertActions)
+        container.add(NEXT_WORD_ACTIONS with nextWordActions)
+        container.add(NEXT_LINE_ACTIONS with nextLineActions)
+        container.add(TOTAL_INSERTED_LENGTH with totalInsertedLength)
+        container.add(TOTAL_INSERTED_LINES with totalInsertedLines)
+        variantStates[potentiallySelectedIndex]?.let { state ->
+          container.add(RECEIVED_PROPOSAL_LENGTH with state.initialSuggestion.length)
+          container.add(RECEIVED_PROPOSAL_LINES with state.initialSuggestion.lines().size)
+          container.add(FINAL_PROPOSAL_LENGTH with state.finalSuggestion.length)
+          container.add(FINAL_PROPOSAL_LINE with state.finalSuggestion.lines().size)
+        }
+      }
     }
     container.logCurrent() // see doc of this function, it's very fast, and we should wait for its completion
+  }
+
+  private class VariantState {
+    var initialSuggestion: String = ""
+    var finalSuggestion: String = ""
   }
 }
 
@@ -128,6 +173,10 @@ private object FinishingLogs : PhasedLogs(Phase.INLINE_API_FINISHING) {
   val NEXT_LINE_ACTIONS = register(EventFields.Int("next_line_actions", "Number of next line inline completion inserts"))
   val TOTAL_INSERTED_LENGTH = register(EventFields.Int("total_inserted_length", "Total length of inserted text"))
   val TOTAL_INSERTED_LINES = register(EventFields.Int("total_inserted_lines", "Total number of inserted lines"))
+  val RECEIVED_PROPOSAL_LENGTH = register(EventFields.Int("received_proposal_length", "Length of proposal that was received from the inline completion provider"))
+  val RECEIVED_PROPOSAL_LINES = register(EventFields.Int("received_proposal_lines", "Number of lines in proposal that was received from the inline completion provider"))
+  val FINAL_PROPOSAL_LENGTH = register(EventFields.Int("final_proposal_length", "Length of proposal at finish"))
+  val FINAL_PROPOSAL_LINE = register(EventFields.Int("final_proposal_line", "Number of lines in proposal at finish"))
 }
 
 internal class InlineCompletionListenerSessionLogs : InlineCompletionSessionLogsEP {

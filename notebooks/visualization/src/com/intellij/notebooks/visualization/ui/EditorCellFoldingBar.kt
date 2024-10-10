@@ -22,7 +22,8 @@ class EditorCellFoldingBar(
   private val toggleListener: () -> Unit,
 ) {
   // Why not use the default approach with RangeHighlighters?
-  // Because it is not possible to create RangeHighlighter for every single inlay, only on a chain of consequential inlays.
+  // Because it is not possible to create RangeHighlighter for every single inlay in range,
+  // RangeHighlighter created for text range and covered all inlays in range.
   private var panel: JComponent? = null
 
   private val boundsChangeListener = object : JupyterBoundsChangeListener {
@@ -41,7 +42,7 @@ class EditorCellFoldingBar(
         val panel = createFoldingBar()
         editor.gutterComponentEx.add(panel)
         this.panel = panel
-        JupyterBoundsChangeHandler.get(editor)?.subscribe(boundsChangeListener)
+        JupyterBoundsChangeHandler.get(editor).subscribe(boundsChangeListener)
         updateBounds()
       }
       else {
@@ -63,7 +64,7 @@ class EditorCellFoldingBar(
         remove(it)
         repaint()
       }
-      JupyterBoundsChangeHandler.get(editor)?.unsubscribe(boundsChangeListener)
+      JupyterBoundsChangeHandler.get(editor).unsubscribe(boundsChangeListener)
       panel = null
     }
   }

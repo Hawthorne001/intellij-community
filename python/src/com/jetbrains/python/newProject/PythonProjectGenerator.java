@@ -8,7 +8,6 @@ import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
-import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -23,7 +22,7 @@ import com.intellij.util.containers.ContainerUtil;
 import com.jetbrains.python.PyBundle;
 import com.jetbrains.python.PyPsiPackageUtil;
 import com.jetbrains.python.newProject.collector.InterpreterStatisticsInfo;
-import com.jetbrains.python.newProject.collector.PythonNewProjectWizardCollector;
+import com.jetbrains.python.newProjectWizard.collector.PythonNewProjectWizardCollector;
 import com.jetbrains.python.packaging.PyPackage;
 import com.jetbrains.python.packaging.PyPackageManager;
 import com.jetbrains.python.packaging.PyPackageUtil;
@@ -34,7 +33,6 @@ import com.jetbrains.python.sdk.PyLazySdk;
 import com.jetbrains.python.sdk.PythonSdkUtil;
 import com.jetbrains.python.sdk.add.v2.PythonInterpreterSelectionMode;
 import com.jetbrains.python.statistics.PyStatisticToolsKt;
-import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -48,33 +46,9 @@ import java.util.function.Consumer;
 
 
 /**
- * This class encapsulates remote settings, so one should extend it for any python project that supports remote generation, at least
- * Instead of {@link #generateProject(Project, VirtualFile, PyNewProjectSettings, Module)} inheritor shall use
- * {@link #configureProject(Project, VirtualFile, PyNewProjectSettings, Module, PyProjectSynchronizer)}*
- * or {@link #configureProjectNoSettings(Project, VirtualFile, Module)} (see difference below)
- * <br/>
- * If your project does not support remote projects generation, be sure to set flag in ctor:{@link #PythonProjectGenerator(boolean)}
- * <br/>
- * <h2>Module vs PyCharm projects</h2>
- * <p>
- * When you create project in PyCharm it always calls {@link #configureProject(Project, VirtualFile, PyNewProjectSettings, Module, PyProjectSynchronizer)},
- * but in Intellij Plugin settings are not ready to the moment of project creation, so there are 2 ways to support plugin:
- *   <ol>
- *     <li>Do not lean on settings at all. You simply implement {@link #configureProjectNoSettings(Project, VirtualFile, Module)}
- *     This way is common for project templates.
- *    </li>
- *    <li>Implement framework as facet. {@link #configureProject(Project, VirtualFile, PyNewProjectSettings, Module, PyProjectSynchronizer)}
- *     will never be called in this case, so you can use "onFacetCreated" event of facet provider</li>
- *   </li>
- *   </ol>
- * </p>
- * <h2>How to report framework installation failures</h2>
- * <p>{@link PyNewProjectSettings#getSdk()} may return null, or something else may prevent package installation.
- * Use {@link #reportPackageInstallationFailure(String, Pair)} in this case.
- * </p>
- *
- * @param <T> project settings
+ * @deprecated Use {@link com.jetbrains.python.newProjectWizard}
  */
+@Deprecated
 public abstract class PythonProjectGenerator<T extends PyNewProjectSettings> extends DirectoryProjectGeneratorBase<T> {
   public static final PyNewProjectSettings NO_SETTINGS = new PyNewProjectSettings();
   private static final Logger LOGGER = Logger.getInstance(PythonProjectGenerator.class);
@@ -112,22 +86,6 @@ public abstract class PythonProjectGenerator<T extends PyNewProjectSettings> ext
     myErrorCallback = errorCallback;
   }
 
-  public @Nullable JComponent getSettingsPanel(File baseDir) throws ProcessCanceledException {
-    return null;
-  }
-
-  /**
-   * Upper part of project generation wizard panel could be customized
-   */
-  @ApiStatus.Internal
-  @Nullable
-  public MainPartUiCustomizer getMainPartUiCustomizer() {
-    return null;
-  }
-
-  public @Nullable JPanel extendBasePanel() throws ProcessCanceledException {
-    return null;
-  }
 
   /**
    * Checks if project type and remote ask allows project creation.
@@ -356,85 +314,36 @@ public abstract class PythonProjectGenerator<T extends PyNewProjectSettings> ext
   public static @NotNull Future<Void> installFrameworkIfNeeded(final @NotNull Project project,
                                                                final @NotNull String frameworkName,
                                                                final @NotNull String requirement,
-                                                               final @Nullable Sdk sdk,
+                                                               final @NotNull Sdk sdk,
                                                                final boolean forceInstallFramework,
                                                                final @Nullable Runnable callback) {
-    return installFrameworkIfNeeded(project, frameworkName, requirement, sdk, forceInstallFramework, false, callback);
-  }
-
-  public static @NotNull Future<Void> installFrameworkInBackground(final @NotNull Project project,
-                                                                   final @NotNull String frameworkName,
-                                                                   final @NotNull String requirement,
-                                                                   final @Nullable Sdk sdk,
-                                                                   final boolean forceInstallFramework,
-                                                                   final @Nullable Runnable callback) {
-    return installFrameworkIfNeeded(project, frameworkName, requirement, sdk, forceInstallFramework, true, callback);
-  }
-
-  private static @NotNull Future<Void> installFrameworkIfNeeded(final @NotNull Project project,
-                                                                final @NotNull String frameworkName,
-                                                                final @NotNull String requirement,
-                                                                final @Nullable Sdk sdk,
-                                                                final boolean forceInstallFramework,
-                                                                boolean asBackgroundTask,
-                                                                final @Nullable Runnable callback) {
 
     var future = new CompletableFuture<Void>();
-    if (sdk == null) {
-      reportPackageInstallationFailure(frameworkName, null);
-      future.completeExceptionally(new RuntimeException(("No SDK provided")));
-      return future;
-    }
 
     // For remote SDK we are not sure if framework exists or not, so we'll check it anyway
     if (forceInstallFramework || PythonSdkUtil.isRemote(sdk)) {
 
-      if (asBackgroundTask) {
-        ProgressManager.getInstance()
-          .run(new Task.Backgroundable(project, PyBundle.message("python.install.framework.ensure.installed", frameworkName), false) {
-            @Override
-            public void run(final @NotNull ProgressIndicator indicator) {
-              installPackages(frameworkName, forceInstallFramework, indicator, requirement, sdk);
-            }
+      ProgressManager.getInstance()
+        .run(new Task.Modal(project, PyBundle.message("python.install.framework.ensure.installed", frameworkName), false) {
+          @Override
+          public void run(final @NotNull ProgressIndicator indicator) {
+            installPackages(frameworkName, forceInstallFramework, indicator, requirement, sdk);
+          }
 
-            @Override
-            public void onThrowable(@NotNull Throwable error) {
-              future.completeExceptionally(error);
-            }
+          @Override
+          public void onThrowable(@NotNull Throwable error) {
+            future.completeExceptionally(error);
+          }
 
-            @Override
-            public void onSuccess() {
-              future.complete(null);
-              // Installed / checked successfully, call callback on AWT
-              if (callback != null) {
-                callback.run();
-              }
+          @Override
+          public void onSuccess() {
+            future.complete(null);
+            // Installed / checked successfully, call callback on AWT
+            if (callback != null) {
+              callback.run();
             }
-          });
-      }
-      else {
-        ProgressManager.getInstance()
-          .run(new Task.Modal(project, PyBundle.message("python.install.framework.ensure.installed", frameworkName), false) {
-            @Override
-            public void run(final @NotNull ProgressIndicator indicator) {
-              installPackages(frameworkName, forceInstallFramework, indicator, requirement, sdk);
-            }
-
-            @Override
-            public void onThrowable(@NotNull Throwable error) {
-              future.completeExceptionally(error);
-            }
-
-            @Override
-            public void onSuccess() {
-              future.complete(null);
-              // Installed / checked successfully, call callback on AWT
-              if (callback != null) {
-                callback.run();
-              }
-            }
-          });
-      }
+          }
+        });
     }
     else {
       future.complete(null);

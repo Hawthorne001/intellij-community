@@ -23,8 +23,8 @@ kotlin {
     jvmToolchain(8)
 }
 
-tasks.withType<KotlinCompile<*>> {
+tasks.withType<KotlinCompile> {
     compilerOptions {
-        freeCompilerArgs = freeCompilerArgs + "-Xopt-in=kotlin.RequiresOptIn"
+        freeCompilerArgs.addAll("-Xopt-in=kotlin.RequiresOptIn")
     }
 }

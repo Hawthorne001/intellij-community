@@ -12,18 +12,23 @@ object MultiLineVisitorUtils {
   interface LanguageSupporter {
     val singleLineCommentPrefix: List<String>
     val multiLineCommentPrefix: List<Pair<String, String>>
+    fun containsValuableSymbols(line: String): Boolean = line.any(::isValuableCharacter)
 
     companion object {
       val DEFAULT = object : LanguageSupporter {
         override val singleLineCommentPrefix: List<String> = listOf("//")
         override val multiLineCommentPrefix: List<Pair<String, String>> = listOf(Pair("/*", "*/"))
       }
+
+      private fun isValuableCharacter(c: Char) = c.isLetterOrDigit() || valuableCharacters.contains(c)
+      private val valuableCharacters = arrayOf('+', '-', '*', '%', '=', '&', '|', '@', '$', '?', '_')
     }
   }
 
-  private fun findEndOfDocstring(start: Int, lines: List<LineInfo>, token: String): Int {
-    val end = lines.asSequence().drop(start).indexOfFirst { it.text.startsWith(token) }
-    return end.takeIf { it > 0 } ?: lines.size
+  private fun findEndOfMultiLineComment(start: Int, lines: List<LineInfo>, token: String): Int {
+    val end = lines.asSequence().drop(start).indexOfFirst { it.text.contains(token) }
+    if (end < 0) return lines.size
+    return start + end
   }
 
   private fun LanguageSupporter.getCommentRanges(lines: List<LineInfo>): List<Pair<Int, Int>> {
@@ -40,9 +45,10 @@ object MultiLineVisitorUtils {
         outer@ while (pos < lines.size) {
           val line = lines[pos].text.trimStart()
           if (line.startsWith(start)) {
-            val match = findEndOfDocstring(pos, lines, end)
+            val match = findEndOfMultiLineComment(pos, lines, end)
             add(pos to match)
-            pos = match + end.length + 1
+            assert(pos < match)
+            pos = match + 1
             continue@outer
           }
           pos++
@@ -106,7 +112,7 @@ object MultiLineVisitorUtils {
 
       val lineInfo = lineRanges[i]
       val indent = lineInfo.indent
-      if (lineInfo.text.isBlank() || !containsValuableSymbols(lineInfo.text)) continue
+      if (lineInfo.text.isBlank() || !supporter.containsValuableSymbols(lineInfo.text)) continue
 
       val lastInScopeOffset = lineRanges.asSequence()
         .drop(i)
@@ -121,8 +127,4 @@ object MultiLineVisitorUtils {
 
   private val String.indent: Int
     get() = takeWhile { it.isWhitespace() }.count()
-
-  private fun containsValuableSymbols(line: String) = line.any(::isValuableCharacter)
-  private fun isValuableCharacter(c: Char) = c.isLetterOrDigit() || valuableCharacters.contains(c)
-  private val valuableCharacters = arrayOf('+', '-', '*', '%', '=', '&', '|', '@', '$', '?', '_')
 }

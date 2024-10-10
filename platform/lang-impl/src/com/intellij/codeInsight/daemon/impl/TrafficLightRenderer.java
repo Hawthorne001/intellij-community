@@ -53,6 +53,8 @@ import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntMaps;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+import kotlin.Lazy;
+import kotlin.LazyKt;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
@@ -65,6 +67,7 @@ import java.util.*;
 import java.util.function.Supplier;
 
 public class TrafficLightRenderer implements ErrorStripeRenderer, Disposable {
+  private static final Logger LOG = Logger.getInstance(TrafficLightRenderer.class);
   private final @NotNull Project myProject;
   private final @NotNull Document myDocument;
   private final DaemonCodeAnalyzerImpl myDaemonCodeAnalyzer;
@@ -91,6 +94,8 @@ public class TrafficLightRenderer implements ErrorStripeRenderer, Disposable {
       ApplicationManager.getApplication().invokeLater(() -> {
         Editor editor = editorMarkupModel.getEditor();
         if (project.isDisposed() || editor.isDisposed()) {
+          LOG.debug("Traffic light won't be set to editor: project dispose ", project.isDisposed(),
+                    " , editor dispose " + editor.isDisposed());
           Disposer.dispose(tlRenderer); // would be registered in setErrorStripeRenderer() below
           return;
         }
@@ -580,22 +585,18 @@ public class TrafficLightRenderer implements ErrorStripeRenderer, Disposable {
   }
 
   protected class DefaultUIController extends AbstractUIController {
-    private final List<AnAction> myMenuActions = initActions();
-
-    private @NotNull List<AnAction> initActions() {
-        List<AnAction> result = new ArrayList<>();
-        result.add(new ConfigureInspectionsAction());
-        result.add(DaemonEditorPopup.createGotoGroup());
-
-        result.add(Separator.create());
-        result.add(new ShowImportTooltipAction());
-
-        return result;
-    }
+    private final Lazy<List<AnAction>> myMenuActions = LazyKt.lazy(() -> { // only create actions when daemon widget used
+      List<AnAction> result = new ArrayList<>();
+      result.add(ActionManager.getInstance().getAction("ConfigureInspectionsAction"));
+      result.add(DaemonEditorPopup.createGotoGroup());
+      result.add(Separator.create());
+      result.add(new ShowImportTooltipAction());
+      return result;
+    });
 
     @Override
     public @NotNull List<AnAction> getActions() {
-      return myMenuActions;
+      return myMenuActions.getValue();
     }
 
     @Override
@@ -619,7 +620,6 @@ public class TrafficLightRenderer implements ErrorStripeRenderer, Disposable {
       public @NotNull ActionUpdateThread getActionUpdateThread() {
         return ActionUpdateThread.EDT;
       }
-
 
       @Override
       public void setSelected(@NotNull AnActionEvent e, boolean state) {

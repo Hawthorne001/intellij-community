@@ -1,6 +1,7 @@
 // Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.ui.dsl.listCellRenderer
 
+import org.jetbrains.annotations.ApiStatus
 import org.jetbrains.annotations.Nls
 import javax.swing.ListCellRenderer
 
@@ -31,5 +32,20 @@ fun <T> listCellRenderer(init: LcrRow<T>.() -> Unit): ListCellRenderer<T> {
 fun <T> textListCellRenderer(textExtractor: (T) -> @Nls String?): ListCellRenderer<T> {
   return listCellRenderer {
     text(textExtractor(value) ?: "")
+  }
+}
+
+/**
+ * A version of [textListCellRenderer] with separator support
+ */
+@ApiStatus.Internal
+fun <T> groupedTextListCellRenderer(textExtractor: (T) -> @Nls String?, separatorExtractor: (T) -> String?): ListCellRenderer<T> {
+  return listCellRenderer {
+    text(textExtractor(value) ?: "")
+    separatorExtractor(value)?.let {
+      separator {
+        text = it
+      }
+    }
   }
 }

@@ -23,7 +23,6 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.diagnostic.telemetry.Indexes
 import com.intellij.platform.diagnostic.telemetry.TelemetryManager.Companion.getInstance
 import com.intellij.platform.diagnostic.telemetry.helpers.use
-import com.intellij.util.concurrency.annotations.RequiresBlockingContext
 import com.intellij.util.gist.GistManager
 import com.intellij.util.gist.GistManagerImpl
 import com.intellij.util.indexing.FilesFilterScanningHandler.IdleFilesFilterScanningHandler
@@ -366,7 +365,7 @@ class UnindexedFilesScanner @JvmOverloads constructor(
 
         // CollectingIterator should skip failing files by itself. But if provider.iterateFiles cannot iterate files and throws exception,
         // we want to ignore the whole origin and let other origins complete normally.
-        LOG.error("Error while scanning files of ${provider.debugName}. To reindex files under this origin IDEA has to be restarted", e)
+        LOG.error("Error while scanning files of ${provider.debugName}. To reindex files under this origin IDE has to be restarted", e)
       }
       finally {
         scanningStatistics.totalOneThreadTimeWithPauses = System.nanoTime() - providerScanningStartTime
@@ -511,14 +510,16 @@ class UnindexedFilesScanner @JvmOverloads constructor(
     }
 
     val diagnosticDumper = IndexDiagnosticDumper.getInstance()
-    diagnosticDumper.onScanningStarted(scanningHistory) //todo[lene] 1
+    diagnosticDumper.onScanningStarted(scanningHistory)
     try {
-      ProjectScanningHistoryImpl.startDumbModeBeginningTracking(myProject, scanningHistory)
-      try {
-        block()
-      }
-      finally {
-        ProjectScanningHistoryImpl.finishDumbModeBeginningTracking(myProject)
+      getInstance().getTracer(Indexes).spanBuilder("InternalSpanForScanningDiagnostic").use {
+        ProjectScanningHistoryImpl.startDumbModeBeginningTracking(myProject, scanningHistory)
+        try {
+          block()
+        }
+        finally {
+          ProjectScanningHistoryImpl.finishDumbModeBeginningTracking(myProject)
+        }
       }
     }
     catch (e: Throwable) {
@@ -526,7 +527,7 @@ class UnindexedFilesScanner @JvmOverloads constructor(
       throw e
     }
     finally {
-      diagnosticDumper.onScanningFinished(scanningHistory) //todo[lene] 1
+      diagnosticDumper.onScanningFinished(scanningHistory)
     }
   }
 
@@ -572,7 +573,6 @@ class UnindexedFilesScanner @JvmOverloads constructor(
     }
   }
 
-  @RequiresBlockingContext
   private fun <T> markStage(scanningStage: ProjectScanningHistoryImpl.Stage, block: () -> T): T {
     ProgressManager.checkCanceled()
     LOG.info("[${myProject.locationHash}], scanning stage: $scanningStage")

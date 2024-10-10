@@ -32,6 +32,7 @@ import com.intellij.openapi.vcs.changes.ui.ChangeDiffRequestChain;
 import com.intellij.openapi.vcs.history.DiffTitleFilePathCustomizer;
 import com.intellij.openapi.vcs.history.DiffTitleFilePathCustomizer.RevisionWithTitle;
 import com.intellij.vcsUtil.VcsUtil;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -43,6 +44,7 @@ import java.util.Objects;
 import static com.intellij.util.ObjectUtils.chooseNotNull;
 import static java.util.Objects.requireNonNull;
 
+@ApiStatus.Internal
 public class ShelvedWrapperDiffRequestProducer implements DiffRequestProducer, ChangeDiffRequestChain.Producer {
   private final Project myProject;
   private final ShelvedWrapper myChange;
@@ -116,10 +118,7 @@ public class ShelvedWrapperDiffRequestProducer implements DiffRequestProducer, C
     DiffRequest request = createTextShelveRequest(title, patch, contextFilePath, leftTitle, rightTitle, commitContext);
 
     Change change = shelvedChange.getChange();
-    List<DiffEditorTitleCustomizer> titleCustomizers =
-      DiffTitleFilePathCustomizer.getTitleCustomizers(myProject,
-                                                      RevisionWithTitle.create(change.getBeforeRevision(), leftTitle),
-                                                      RevisionWithTitle.create(change.getAfterRevision(), rightTitle));
+    List<DiffEditorTitleCustomizer> titleCustomizers = DiffTitleFilePathCustomizer.getTitleCustomizers(myProject, change, leftTitle, rightTitle);
     return DiffUtil.addTitleCustomizers(request, titleCustomizers);
   }
 

@@ -405,6 +405,9 @@
     <registryKey key="maven.delegate.trust.ssl.to.ide" defaultValue="true"
                  description="Use IDEA confirming trust manager for maven importer"/>
 
+    <registryKey key="maven.build.additional.jars" defaultValue="true"
+                 description="Build additional jars with classifier"/>
+
     <intentionAction>
       <language>XML</language>
       <className>org.jetbrains.idea.maven.dom.converters.MavenArtifactCoordinatesConverter$MyUpdateIndicesIntention</className>
@@ -574,19 +577,12 @@
     <versionAwareMavenSupport implementation="org.jetbrains.idea.maven.maven3.Maven3Support"/>
     <versionAwareMavenSupport implementation="org.jetbrains.idea.maven.maven4.Maven4Support"/>
 
-    <importer implementation="org.jetbrains.idea.maven.importing.MavenCompilerConfigurator"/>
     <importing.workspaceConfigurator implementation="org.jetbrains.idea.maven.importing.MavenCompilerConfigurator"/>
-    <importer implementation="org.jetbrains.idea.maven.importing.MavenAnnotationProcessorConfigurator"/>
     <importing.workspaceConfigurator implementation="org.jetbrains.idea.maven.importing.MavenAnnotationProcessorConfigurator"/>
-    <importer implementation="org.jetbrains.idea.maven.importing.MavenExternalAnnotationsConfigurator"/>
     <importing.workspaceConfigurator implementation="org.jetbrains.idea.maven.importing.MavenExternalAnnotationsConfigurator"/>
-    <importer implementation="org.jetbrains.idea.maven.importing.MavenRemoteRepositoriesConfigurator"/>
     <importing.workspaceConfigurator implementation="org.jetbrains.idea.maven.importing.MavenRemoteRepositoriesConfigurator"/>
 
-    <importer implementation="org.jetbrains.idea.maven.importing.MavenEncodingConfigurator"/>
     <importing.workspaceConfigurator implementation="org.jetbrains.idea.maven.importing.MavenEncodingConfigurator"/>
-    <importer implementation="org.jetbrains.idea.maven.importing.MavenIdeaPluginImporter"/>
-    <importer implementation="org.jetbrains.idea.maven.importing.MavenWslTargetConfigurator"/>
     <importing.workspaceConfigurator implementation="org.jetbrains.idea.maven.importing.MavenWslTargetConfigurator"/>
 
     <importing.workspaceConfigurator implementation="org.jetbrains.idea.maven.importing.MavenShadePluginConfigurator"/>

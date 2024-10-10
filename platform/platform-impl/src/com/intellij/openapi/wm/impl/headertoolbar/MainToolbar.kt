@@ -1,15 +1,18 @@
-// Copyright 2000-2023 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.wm.impl.headertoolbar
 
 import com.intellij.accessibility.AccessibilityUtils
 import com.intellij.ide.ProjectWindowCustomizerService
+import com.intellij.ide.ui.LafManager
 import com.intellij.ide.ui.LafManagerListener
 import com.intellij.ide.ui.UISettings
+import com.intellij.ide.ui.UISettingsListener
 import com.intellij.ide.ui.customization.ActionUrl
 import com.intellij.ide.ui.customization.CustomActionsListener
 import com.intellij.ide.ui.customization.CustomActionsSchema
 import com.intellij.ide.ui.customization.CustomizationUtil
 import com.intellij.ide.ui.laf.darcula.ui.MainToolbarComboBoxButtonUI
+import com.intellij.idea.AppMode
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.actionSystem.ex.ActionUtil
@@ -21,11 +24,13 @@ import com.intellij.openapi.actionSystem.impl.ActionToolbarImpl
 import com.intellij.openapi.actionSystem.impl.ActionToolbarPresentationFactory
 import com.intellij.openapi.actionSystem.impl.PresentationFactory
 import com.intellij.openapi.actionSystem.toolbarLayout.CompressingLayoutStrategy
+import com.intellij.openapi.actionSystem.toolbarLayout.ToolbarLayoutStrategy
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.keymap.impl.ui.ActionsTreeUtil
 import com.intellij.openapi.project.DumbAwareAction
+import com.intellij.openapi.project.ProjectNameListener
 import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.util.SystemInfoRt
 import com.intellij.openapi.wm.impl.IdeBackgroundUtil
@@ -39,7 +44,6 @@ import com.intellij.platform.diagnostic.telemetry.impl.span
 import com.intellij.ui.*
 import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.ui.mac.touchbar.TouchbarSupport
-import com.intellij.util.concurrency.annotations.RequiresBlockingContext
 import com.intellij.util.containers.ContainerUtil
 import com.intellij.util.ui.JBInsets
 import com.intellij.util.ui.JBUI
@@ -50,6 +54,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
+import org.jetbrains.annotations.ApiStatus
 import org.jetbrains.annotations.ApiStatus.Internal
 import java.awt.*
 import java.awt.event.MouseEvent
@@ -115,6 +120,17 @@ class MainToolbar(
         updateToolbarActions()
       })
     }
+    (layout as HorizontalLayout).apply {
+      preferredSizeFunction = { component ->
+        if (component is ActionToolbar) {
+          val availableSize = Dimension(this@MainToolbar.width - 4 * JBUI.scale(layoutGap), this@MainToolbar.height)
+          CompressingLayoutStrategy.distributeSize(availableSize, components.filterIsInstance<ActionToolbar>()).getValue(component)
+        }
+        else {
+          component.preferredSize
+        }
+      }
+    }
   }
 
   private fun updateToolbarActions() {
@@ -159,6 +175,18 @@ class MainToolbar(
     }
 
     migratePreviousCustomizations(schema)
+    migrateVcsActions(schema)
+  }
+
+  private fun migrateVcsActions(schema: CustomActionsSchema) {
+    if (AppMode.isRemoteDevHost()) return
+    val allActions = schema.getActions().toMutableList()
+    val actionsToRemove = setOf("main.toolbar.git.update", "main.toolbar.git.push")
+    val wereRemoved = allActions.removeIf { it.groupPath.contains("Main Toolbar") && it.component in actionsToRemove }
+    if (wereRemoved) {
+      schema.setActions(allActions)
+      schemaChanged()
+    }
   }
 
   /*
@@ -294,11 +322,7 @@ private fun createActionBar(group: ActionGroup, customizationGroup: ActionGroup?
 
   toolbar.setMinimumButtonSize { ActionToolbar.experimentalToolbarMinimumButtonSize() }
   toolbar.targetComponent = null
-  toolbar.layoutStrategy = object : CompressingLayoutStrategy() {
-    override fun getNonCompressibleWidth(mainToolbar: Container): Int {
-      return super.getNonCompressibleWidth(mainToolbar) + layoutGap * 4
-    }
-  }
+  toolbar.layoutStrategy = ToolbarLayoutStrategy.COMPRESSING_STRATEGY
   val component = toolbar.component
   component.border = JBUI.Borders.empty()
   component.isOpaque = false
@@ -309,7 +333,8 @@ private fun createActionBar(group: ActionGroup, customizationGroup: ActionGroup?
  * Method is added for Demo-action only
  * Do not use it in your code
  */
-internal fun createDemoToolbar(group: ActionGroup): MyActionToolbarImpl = createActionBar(group, null)
+@Internal
+fun createDemoToolbar(group: ActionGroup): MyActionToolbarImpl = createActionBar(group, null)
 
 private fun addWidget(widget: JComponent, parent: JComponent, position: HorizontalLayout.Group) {
   parent.add(widget, position)
@@ -318,7 +343,8 @@ private fun addWidget(widget: JComponent, parent: JComponent, position: Horizont
   }
 }
 
-internal class MyActionToolbarImpl(group: ActionGroup, customizationGroup: ActionGroup?)
+@ApiStatus.Internal
+class MyActionToolbarImpl(group: ActionGroup, customizationGroup: ActionGroup?)
   : ActionToolbarImpl(ActionPlaces.MAIN_TOOLBAR, group, true, false, false) {
   private val iconUpdater = HeaderIconUpdater()
 
@@ -385,7 +411,7 @@ internal class MyActionToolbarImpl(group: ActionGroup, customizationGroup: Actio
   }
 
   override fun getSeparatorColor(): Color {
-    return JBColor.namedColor("MainToolbar.separatorColor", super.getSeparatorColor())
+    return JBColor.namedColor("MainToolbar.separatorColor", super.separatorColor)
   }
 
   private fun findComboButton(c: Container): ComboBoxButton? {
@@ -417,6 +443,9 @@ internal class MyActionToolbarImpl(group: ActionGroup, customizationGroup: Actio
     if (comp is JComponent) {
       ClientProperty.put(comp, IdeBackgroundUtil.NO_BACKGROUND, true)
     }
+    if (comp is ActionToolbarImpl) {
+      comp.layoutStrategy = ToolbarLayoutStrategy.COMPRESSING_STRATEGY
+    }
   }
 
   private fun updateFont() {
@@ -443,12 +472,10 @@ private suspend fun computeMainActionGroups(customActionSchema: CustomActionsSch
   return result
 }
 
-@RequiresBlockingContext
 internal fun blockingComputeMainActionGroups(): List<Pair<ActionGroup, HorizontalLayout.Group>> {
   return blockingComputeMainActionGroups(CustomActionsSchema.getInstance())
 }
 
-@RequiresBlockingContext
 internal fun blockingComputeMainActionGroups(customActionSchema: CustomActionsSchema): List<Pair<ActionGroup, HorizontalLayout.Group>> {
   return getMainToolbarGroups()
     .mapNotNull { info ->

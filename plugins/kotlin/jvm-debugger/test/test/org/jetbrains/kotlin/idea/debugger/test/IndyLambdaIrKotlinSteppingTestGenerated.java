@@ -1698,6 +1698,11 @@ public abstract class IndyLambdaIrKotlinSteppingTestGenerated extends AbstractIn
             runTest("testData/stepping/custom/smartStepIntoDeferredSamLambdas.kt");
         }
 
+        @TestMetadata("smartStepIntoFunWithContext.kt")
+        public void testSmartStepIntoFunWithContext() throws Exception {
+            runTest("testData/stepping/custom/smartStepIntoFunWithContext.kt");
+        }
+
         @TestMetadata("smartStepIntoFunWithDefaultArgs.kt")
         public void testSmartStepIntoFunWithDefaultArgs() throws Exception {
             runTest("testData/stepping/custom/smartStepIntoFunWithDefaultArgs.kt");
@@ -1901,6 +1906,11 @@ public abstract class IndyLambdaIrKotlinSteppingTestGenerated extends AbstractIn
         @TestMetadata("smartStepIntoToLambdaParameterAfterSam.kt")
         public void testSmartStepIntoToLambdaParameterAfterSam() throws Exception {
             runTest("testData/stepping/custom/smartStepIntoToLambdaParameterAfterSam.kt");
+        }
+
+        @TestMetadata("smartStepIntoVarargFun.kt")
+        public void testSmartStepIntoVarargFun() throws Exception {
+            runTest("testData/stepping/custom/smartStepIntoVarargFun.kt");
         }
 
         @TestMetadata("smartStepIntoWithDefaultParameters.kt")

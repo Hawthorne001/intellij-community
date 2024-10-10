@@ -323,7 +323,7 @@ public class Py3TypeTest extends PyTestCase {
 
   // PY-20770
   public void testAsyncGeneratorAsend() {
-    doTest("Awaitable[int]",
+    doTest("Coroutine[Any, Any, int]",
            """
              async def asyncgen():
                  yield 42
@@ -1845,6 +1845,23 @@ public class Py3TypeTest extends PyTestCase {
              """);
   }
 
+  // PY-75961
+  public void testTypeGuardNotAppliedForUnresolvedType() {
+    doTest("list[object]",
+           """
+             from typing import List
+             from typing import TypeGuard
+                          
+             def is_str_list(val: List[object]) -> TypeGuard[Unresolved]:
+                 return all(isinstance(x, str) for x in val)                          
+                          
+             def func1(val: List[object]):
+                 if is_str_list(val):
+                     expr = val
+             """);
+  }
+
+
   public void testTypeGuardCannotBeReturned() {
     myFixture.configureByText(PythonFileType.INSTANCE, """
              from typing import List
@@ -2766,6 +2783,16 @@ public class Py3TypeTest extends PyTestCase {
       a = A()
       b = B()
       expr = a != b
+      """);
+  }
+
+  // PY-60968
+  public void testCsvDictReaderIteratorType() {
+    doTest("list[dict[str | Any, str | Any]]", """
+          import csv
+          with open("file.csv") as f:
+              reader = csv.DictReader(f)
+              expr = [line for line in reader]
       """);
   }
 

@@ -12,6 +12,7 @@ import com.intellij.platform.core.nio.fs.MultiRoutingFileSystemProvider
 import com.intellij.platform.ijent.community.impl.IjentFailSafeFileSystemPosixApi
 import com.intellij.platform.ijent.community.impl.nio.IjentNioFileSystemProvider
 import com.intellij.platform.ijent.community.impl.nio.telemetry.TracingFileSystemProvider
+import com.intellij.util.containers.ContainerUtil
 import com.intellij.util.containers.forEachGuaranteed
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
@@ -28,15 +29,18 @@ import java.util.function.BiConsumer
 
 @ApiStatus.Internal
 @VisibleForTesting
+// TODO: should be merged with IjentNioFsRegistry
 class IjentWslNioFsToggleStrategy(
   multiRoutingFileSystemProvider: FileSystemProvider,
   private val coroutineScope: CoroutineScope,
 ) {
   private val ownFileSystems = OwnFileSystems(multiRoutingFileSystemProvider)
+  internal val enabledInDistros: MutableSet<WSLDistribution> = ContainerUtil.newConcurrentSet()
 
   init {
     coroutineScope.coroutineContext.job.invokeOnCompletion {
       unregisterAll()
+      enabledInDistros.clear()
     }
   }
 
@@ -69,10 +73,12 @@ class IjentWslNioFsToggleStrategy(
   }
 
   private suspend fun handleWslDistributionAddition(distro: WSLDistribution) {
+    enabledInDistros += distro
     switchToIjentFs(distro)
   }
 
   private fun handleWslDistributionDeletion(distro: WSLDistribution) {
+    enabledInDistros -= distro
     ownFileSystems.compute(distro) { _, ownFs, actualFs ->
       if (ownFs == actualFs) {
         LOG.info("Unregistering a custom filesystem $actualFs from a removed WSL distribution $distro")

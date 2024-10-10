@@ -77,7 +77,6 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.openapi.vfs.newvfs.BulkFileListener;
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
-import com.intellij.openapi.wm.IdeFrame;
 import com.intellij.platform.backend.workspace.GlobalWorkspaceModelCache;
 import com.intellij.platform.backend.workspace.WorkspaceModelCache;
 import com.intellij.serviceContainer.AlreadyDisposedException;
@@ -148,6 +147,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static com.intellij.ide.impl.ProjectUtil.getProjectForComponent;
 import static org.jetbrains.jps.api.CmdlineRemoteProto.Message.ControllerMessage.ParametersMessage.TargetTypeBuildScope;
 
 public final class BuildManager implements Disposable {
@@ -173,6 +173,8 @@ public final class BuildManager implements Disposable {
     SystemInfo.isFileSystemCaseSensitive ?
     s -> !(s.contains(IDEA_PROJECT_DIR_PATTERN) || s.endsWith(IWS_EXTENSION) || s.endsWith(IPR_EXTENSION)) :
     s -> !(Strings.endsWithIgnoreCase(s, IWS_EXTENSION) || Strings.endsWithIgnoreCase(s, IPR_EXTENSION) || StringUtil.containsIgnoreCase(s, IDEA_PROJECT_DIR_PATTERN));
+
+  private static final String JPS_USE_EXPERIMENTAL_STORAGE = "jps.use.experimental.storage";
 
   private final String myFallbackSdkHome;
   private final String myFallbackSdkVersion;
@@ -779,11 +781,7 @@ public final class BuildManager implements Disposable {
       if (window == null) {
         window = ComponentUtil.getActiveWindow();
       }
-
-      Component component = ComponentUtil.findUltimateParent(window);
-      if (component instanceof IdeFrame) {
-        project = ((IdeFrame)component).getProject();
-      }
+      project = getProjectForComponent(window);
     }
 
     return isValidProject(project)? project : null;
@@ -1409,6 +1407,9 @@ public final class BuildManager implements Disposable {
     }
 
     cmdLine.addParameter("-Djava.awt.headless=true");
+    if (Boolean.getBoolean(JPS_USE_EXPERIMENTAL_STORAGE)) {
+      cmdLine.addParameter("-D" + JPS_USE_EXPERIMENTAL_STORAGE + "=true");
+    }
 
     String jnaBootLibraryPath = System.getProperty("jna.boot.library.path");
     if (jnaBootLibraryPath != null && wslPath == null) {

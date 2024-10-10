@@ -44,10 +44,12 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.debounce
 import org.jdom.Element
+import org.jetbrains.annotations.ApiStatus
 import javax.swing.JComponent
 
 private const val STRIPE_ACTION_GROUP_ID = "TopStripeActionGroup"
 
+@ApiStatus.Internal
 class StripeActionGroup: ActionGroup(), DumbAware {
   private val myFactory: Map<ActivateToolWindowAction, AnAction> = ConcurrentFactoryMap.create(::createAction) {
     CollectionFactory.createConcurrentWeakKeyWeakValueMap()
@@ -101,7 +103,7 @@ class StripeActionGroup: ActionGroup(), DumbAware {
 
     override fun update(e: AnActionEvent) {
       super.update(e)
-      e.presentation.isVisible = buttonState.isPinned(toolWindowId)
+      e.presentation.isVisible = e.presentation.isEnabled && buttonState.isPinned(toolWindowId)
       Toggleable.setSelected(e.presentation, isSelected(e))
     }
 
@@ -175,6 +177,7 @@ class StripeActionGroup: ActionGroup(), DumbAware {
           override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
           override fun update(e: AnActionEvent) {
             super.update(e)
+            e.presentation.isVisible = e.presentation.isVisible && e.presentation.isEnabled
             e.presentation.putClientProperty(ActionUtil.INLINE_ACTIONS, listOf(TogglePinAction(ac.toolWindowId)))
           }
         }

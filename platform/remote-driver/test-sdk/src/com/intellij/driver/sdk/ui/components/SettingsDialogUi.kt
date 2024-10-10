@@ -20,6 +20,9 @@ class SettingsDialogUiComponent(data: ComponentData) : UiComponent(data) {
   val searchPluginTextField
     get() = pluginsPanel.textField("//div[@class='TextFieldWithProcessing']")
 
+  val installedTab
+    get() = x("//div[@class='JLabel' and @text ='Installed']")
+
   val checkBoxTree
     get() = x("//div[@class='CheckboxTree']", JCheckboxTreeFixture::class.java)
 
@@ -29,7 +32,9 @@ class SettingsDialogUiComponent(data: ComponentData) : UiComponent(data) {
 
   fun installPluginFromList(pluginName: String) {
     x("//div[@class='ListPluginComponent'][./div[@text='$pluginName']]", ListPluginComponent::class.java)
-      .installButton.click()
+      .waitFound()
+      .installButton
+      .click()
   }
 
   val pluginDetailsPage: PluginDetailsPage

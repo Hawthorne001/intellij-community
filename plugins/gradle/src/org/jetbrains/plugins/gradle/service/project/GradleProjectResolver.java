@@ -9,6 +9,7 @@ import com.intellij.gradle.toolingExtension.impl.model.taskModel.DefaultGradleTa
 import com.intellij.gradle.toolingExtension.impl.modelAction.GradleModelFetchAction;
 import com.intellij.gradle.toolingExtension.impl.telemetry.GradleTracingContext;
 import com.intellij.gradle.toolingExtension.impl.telemetry.TelemetryHolder;
+import com.intellij.gradle.toolingExtension.impl.util.GradleTreeTraverserUtil;
 import com.intellij.gradle.toolingExtension.util.GradleVersionUtil;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.externalSystem.importing.ProjectResolverPolicy;
@@ -36,7 +37,6 @@ import com.intellij.util.ExceptionUtil;
 import com.intellij.util.Function;
 import com.intellij.util.ObjectUtils;
 import com.intellij.util.SmartList;
-import com.intellij.util.concurrency.annotations.RequiresBlockingContext;
 import com.intellij.util.containers.CollectionFactory;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.containers.MultiMap;
@@ -239,7 +239,6 @@ public class GradleProjectResolver implements ExternalSystemProjectResolver<Grad
     return true;
   }
 
-  @RequiresBlockingContext
   private <R> R computeCancellable(@NotNull DefaultProjectResolverContext resolverContext, @NotNull Supplier<R> action) {
     ExternalSystemTaskId taskId = resolverContext.getExternalSystemTaskId();
     CancellationTokenSource cancellationTokenSource = resolverContext.getCancellationTokenSource();
@@ -722,6 +721,7 @@ public class GradleProjectResolver implements ExternalSystemProjectResolver<Grad
     replicateProjectModelHierarchyInExternalProjectHierarchy(models);
     associateSourceSetModelsWithExternalProjects(models);
     associateSourceSetDependencyModelsWithSourceSetModels(models);
+    registerInheritedTaskModelsInParentTaskModel(models);
     associateTaskModelsWithExternalProjects(models);
   }
 
@@ -778,6 +778,32 @@ public class GradleProjectResolver implements ExternalSystemProjectResolver<Grad
           sourceSet.setDependencies(sourceSetDependencies);
         }
       }
+    }
+  }
+
+  private static void registerInheritedTaskModelsInParentTaskModel(@NotNull GradleIdeaModelHolder models) {
+    for (var buildModel : models.getAllBuilds()) {
+      GradleTreeTraverserUtil.backwardTraverseTree(buildModel.getRootProject(), it -> it.getChildProjects(), projectModel -> {
+        var taskModel = (DefaultGradleTaskModel)models.getProjectModel(projectModel, GradleTaskModel.class);
+        if (taskModel == null) return;
+
+        var tasks = new HashMap<>(taskModel.getTasks());
+
+        for (var childProjectModel : projectModel.getChildProjects()) {
+          var childTaskModel = (DefaultGradleTaskModel)models.getProjectModel(childProjectModel, GradleTaskModel.class);
+          if (childTaskModel == null) continue;
+
+          for (var childTask : childTaskModel.getTasks().values()) {
+            if (tasks.containsKey(childTask.getName())) continue;
+
+            var inheritedTask = new DefaultExternalTask(childTask);
+            inheritedTask.setInherited(true);
+            tasks.put(inheritedTask.getName(), inheritedTask);
+          }
+        }
+
+        taskModel.setTasks(tasks);
+      });
     }
   }
 
@@ -843,9 +869,8 @@ public class GradleProjectResolver implements ExternalSystemProjectResolver<Grad
         }
 
         for (var contentRootNode : findAll(sourceSetNode, ProjectKeys.CONTENT_ROOT)) {
-          for (var source : contentRootNode.getData().getSourceRoots().entrySet()) {
-            var sourceRootType = source.getKey();
-            for (var sourceRoot : source.getValue()) {
+          for (var sourceRootType : ExternalSystemSourceType.values()) {
+            for (var sourceRoot : contentRootNode.getData().getPaths(sourceRootType)) {
               var sourceRootPath = sourceRoot.getPath();
               var packagePrefix = sourceRoot.getPackagePrefix();
               var contentRootData = ContainerUtil.getLastItem(contentRootNodes.getAncestorValues(sourceRootPath));
@@ -879,9 +904,8 @@ public class GradleProjectResolver implements ExternalSystemProjectResolver<Grad
       var externalContentRootNodes = new ArrayList<ContentRootData>();
 
       for (var contentRootNode : findAll(moduleNode, ProjectKeys.CONTENT_ROOT)) {
-        for (var source : contentRootNode.getData().getSourceRoots().entrySet()) {
-          var sourceRootType = source.getKey();
-          for (var sourceRoot : source.getValue()) {
+        for (var sourceRootType : ExternalSystemSourceType.values()) {
+          for (var sourceRoot : contentRootNode.getData().getPaths(sourceRootType)) {
             var sourceRootPath = sourceRoot.getPath();
             var packagePrefix = sourceRoot.getPackagePrefix();
             if (FileUtil.isAncestor(projectRootPath, sourceRootPath, false)) {

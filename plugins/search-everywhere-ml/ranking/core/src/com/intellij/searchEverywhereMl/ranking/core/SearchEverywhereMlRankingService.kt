@@ -2,6 +2,7 @@
 package com.intellij.searchEverywhereMl.ranking.core
 
 import com.intellij.ide.actions.searcheverywhere.*
+import com.intellij.ide.actions.searcheverywhere.SemanticSearchEverywhereContributor
 import com.intellij.ide.util.scopeChooser.ScopeDescriptor
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.components.service
@@ -10,7 +11,6 @@ import com.intellij.openapi.util.registry.Registry
 import com.intellij.searchEverywhereMl.RANKING_EP_NAME
 import com.intellij.searchEverywhereMl.SearchEverywhereMlExperiment
 import com.intellij.searchEverywhereMl.SearchEverywhereTabWithMlRanking
-import com.intellij.ide.actions.searcheverywhere.SemanticSearchEverywhereContributor
 import com.intellij.searchEverywhereMl.ranking.core.features.SearchEverywhereElementFeaturesProvider.Companion.BUFFERED_TIMESTAMP
 import com.intellij.searchEverywhereMl.settings.SearchEverywhereMlSettings
 import com.intellij.ui.components.JBList
@@ -30,10 +30,6 @@ class SearchEverywhereMlRankingService : SearchEverywhereMlService {
 
   internal val experiment: SearchEverywhereMlExperiment = SearchEverywhereMlExperiment()
 
-  override val shouldAllTabPrioritizeRecentFiles: Boolean
-    get() = experiment.getExperimentForTab(
-      SearchEverywhereTabWithMlRanking.ALL) != SearchEverywhereMlExperiment.ExperimentType.NO_RECENT_FILES_PRIORITIZATION
-
 
   override fun isEnabled(): Boolean {
     val settings = service<SearchEverywhereMlSettings>()
@@ -48,7 +44,6 @@ class SearchEverywhereMlRankingService : SearchEverywhereMlService {
         tab == SearchEverywhereTabWithMlRanking.CLASSES && PlatformUtils.isPyCharm() && PlatformUtils.isIntelliJ()
       }
       SearchEverywhereMlExperiment.ExperimentType.USE_EXPERIMENTAL_MODEL -> true
-      SearchEverywhereMlExperiment.ExperimentType.NO_RECENT_FILES_PRIORITIZATION -> true
       else -> false
     }
   }
@@ -139,7 +134,6 @@ class SearchEverywhereMlRankingService : SearchEverywhereMlService {
     else {
       return settings.isSortingByMlEnabled(tab)
              || experiment.getExperimentForTab(tab) == SearchEverywhereMlExperiment.ExperimentType.USE_EXPERIMENTAL_MODEL
-             || experiment.getExperimentForTab(tab) == SearchEverywhereMlExperiment.ExperimentType.NO_RECENT_FILES_PRIORITIZATION
     }
   }
 
@@ -202,7 +196,8 @@ class SearchEverywhereMlRankingService : SearchEverywhereMlService {
   private fun mapElementsProvider(elementsProvider: () -> List<SearchEverywhereFoundElementInfo>): () -> List<SearchEverywhereFoundElementInfoWithMl> {
     return { ->
       elementsProvider.invoke()
-        .map { SearchEverywhereFoundElementInfoWithMl.from(it) }
+        .map {
+          SearchEverywhereFoundElementInfoWithMl.from(it) }
     }
   }
 }

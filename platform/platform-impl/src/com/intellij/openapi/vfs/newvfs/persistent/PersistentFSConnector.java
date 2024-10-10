@@ -52,11 +52,6 @@ final class PersistentFSConnector {
     return init(cachesDir, version);
   }
 
-  //TODO RC: why do we need the method? -- better call connection.close() directly
-  public static void disconnect(@NotNull PersistentFSConnection connection) throws IOException {
-    connection.close();
-  }
-
   //=== internals:
 
   private static @NotNull VFSInitializationResult init(@NotNull Path cachesDir,
@@ -71,7 +66,7 @@ final class PersistentFSConnector {
           RECOVERERS
         );
         //heuristics: just created VFS contains only 1 record (=super-root):
-        boolean justCreated = connection.getRecords().recordsCount() == 1
+        boolean justCreated = connection.records().recordsCount() == 1
                               && connection.isDirty();
 
         return new VFSInitializationResult(
@@ -162,7 +157,6 @@ final class PersistentFSConnector {
         if (rootRecordId != FSRecords.ROOT_FILE_ID) {
           throw new AssertionError("First record created must have id=" + FSRecords.ROOT_FILE_ID + " but " + rootRecordId + " got instead");
         }
-        vfsLoader.recordsStorage().cleanRecord(rootRecordId);
       }
       else {
         vfsLoader.selfCheck();
@@ -185,11 +179,6 @@ final class PersistentFSConnector {
       }
 
       PersistentFSConnection connection = vfsLoader.createConnection();
-
-      if (needInitialization) {//make just-initialized connection dirty (i.e. it must be saved)
-        connection.markDirty();
-      }
-
       return connection;
     }
     catch (Throwable e) { // IOException, IllegalArgumentException, AssertionError

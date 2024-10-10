@@ -11,6 +11,7 @@ import com.intellij.psi.xml.XmlTag
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.idea.maven.dom.model.MavenDomProfiles
 import org.jetbrains.idea.maven.dom.model.MavenDomSettingsModel
+import org.jetbrains.idea.maven.dom.references.MavenPropertyPsiReference
 import org.jetbrains.idea.maven.model.MavenExplicitProfiles
 import org.jetbrains.idea.maven.server.MavenServerManager
 import org.jetbrains.idea.maven.utils.MavenUtil
@@ -18,15 +19,15 @@ import org.jetbrains.idea.maven.vfs.MavenPropertiesVirtualFileSystem
 import org.junit.Test
 
 class MavenPropertyCompletionAndResolutionTest : MavenDomTestCase() {
-  
+
   override fun setUp() = runBlocking {
     super.setUp()
 
     importProjectAsync("""
-                    <groupId>test</groupId>
-                    <artifactId>project</artifactId>
-                    <version>1</version>
-                    """.trimIndent())
+                        <groupId>test</groupId>
+                        <artifactId>project</artifactId>
+                        <version>1</version>
+                        """.trimIndent())
   }
 
   @Test
@@ -569,8 +570,7 @@ class MavenPropertyCompletionAndResolutionTest : MavenDomTestCase() {
 
   @Test
   fun testResolutionWithTriggeredProfiles() = runBlocking {
-    needFixForMaven4()
-    updateProjectPom("""
+    importProjectAsync("""
                        <groupId>test</groupId>
                        <artifactId>project</artifactId>
                        <version>1</version>
@@ -591,10 +591,32 @@ class MavenPropertyCompletionAndResolutionTest : MavenDomTestCase() {
                            </properties>
                          </profile>
                        </profiles>
-                       <name>${'$'}{<caret>foo}</name>
+                       <name>${'$'}{foo}</name>
                        """.trimIndent())
 
-    updateAllProjects()
+    createProjectPom("""
+      <groupId>test</groupId>
+                       <artifactId>project</artifactId>
+                       <version>1</version>
+                       <profiles>
+                         <profile>
+                           <id>one</id>
+                           <properties>
+                             <foo>value</foo>
+                           </properties>
+                         </profile>
+                         <profile>
+                           <id>two</id>
+                           <activation>
+                             <jdk>[1.5,)</jdk>
+                           </activation>
+                           <properties>
+                             <foo>value</foo>
+                           </properties>
+                         </profile>
+                       </profiles>
+                       <name>${'$'}{<caret>foo}</name>
+""")
 
     assertResolved(projectPom, findTag(projectPom, "project.profiles[1].properties.foo"))
   }
@@ -869,6 +891,81 @@ class MavenPropertyCompletionAndResolutionTest : MavenDomTestCase() {
   }
 
   @Test
+  fun testResolvingPropertiesToThemselves() = runBlocking {
+    MavenPropertyPsiReference.PROPS_RESOLVING_TO_MY_ELEMENT.forEach { propertyName ->
+      updateProjectPom("""
+                         <groupId>test</groupId>
+                         <artifactId>project</artifactId>
+                         <version>1</version>
+                         <name>${'$'}{<caret>$propertyName}</name>
+                         """.trimIndent())
+      val ref = getReferenceAtCaret(projectPom)!!
+      assertResolved(projectPom, ref.element)
+    }
+  }
+
+  @Test
+  fun testParsedVersionResolving() = runBlocking {
+    updateProjectPom("""
+                        <groupId>test</groupId>
+                        <artifactId>project</artifactId>
+                        <version>1</version>
+                        <name>${'$'}{<caret>parsedVersion.majorVersion}</name>
+                        <build>
+                          <plugins>
+                            <plugin>
+                              <groupId>org.codehaus.mojo</groupId>
+                              <artifactId>build-helper-maven-plugin</artifactId>
+                              <executions>
+                                <execution>
+                                  <goals>
+                                    <goal>parse-version</goal>
+                                  </goals>
+                                </execution>
+                              </executions>
+                            </plugin>
+                          </plugins>
+                        </build>
+                    """.trimIndent())
+    fixture.configureFromExistingVirtualFile(projectPom)
+    // Resolving this property depends on the presence of the build-helper-maven-plugin in pom. Reimport to add the plugin in MavenProject.
+    runBlocking { importProjectAsync() }
+    assertResolved(projectPom, findTag(projectPom, "project.version"))
+  }
+
+  @Test
+  fun testParsedVersionResolvingCustomPrefix() = runBlocking {
+    updateProjectPom("""
+                        <groupId>test</groupId>
+                        <artifactId>project</artifactId>
+                        <version>1</version>
+                        <name>${'$'}{<caret>parsedVersionCustom.majorVersion}</name>
+                        <build>
+                          <plugins>
+                            <plugin>
+                              <groupId>org.codehaus.mojo</groupId>
+                              <artifactId>build-helper-maven-plugin</artifactId>
+                              <executions>
+                                <execution>
+                                  <goals>
+                                    <goal>parse-version</goal>
+                                  </goals>
+                                </execution>
+                              </executions>
+                              <configuration>
+                                <propertyPrefix>parsedVersionCustom</propertyPrefix>
+                              </configuration>
+                            </plugin>
+                          </plugins>
+                        </build>
+                    """.trimIndent())
+    fixture.configureFromExistingVirtualFile(projectPom)
+    // Resolving this property depends on the presence of the build-helper-maven-plugin in pom. Reimport to add the plugin in MavenProject.
+    runBlocking { importProjectAsync() }
+    assertResolved(projectPom, findTag(projectPom, "project.version"))
+  }
+
+  @Test
   fun testNotUpperCaseEnvPropertiesOnWindows() = runBlocking {
     if (!SystemInfo.isWindows) return@runBlocking
 
@@ -905,20 +1002,22 @@ class MavenPropertyCompletionAndResolutionTest : MavenDomTestCase() {
                        ${'$'}{pom.compileArtifacts.empty}
                        ${'$'}{modules.empty}
                        ${'$'}{projectDirectory}
+                       ${'$'}{parsedVersion.majorVersion}
                        </foo>
                        </properties>
                        """.trimIndent()
     )
 
-    checkHighlighting(projectPom,
-                      Highlight(text = "xxx"),
-                      Highlight(text = "zzz"),
-                      Highlight(text = "pom.maven.build.timestamp"),
-                      Highlight(text = "parent.maven.build.timestamp"),
-                      Highlight(text = "baseUri"),
-                      Highlight(text = "unknownProperty"),
-                      Highlight(text = "project.version.bar"),
-                      Highlight(text = "project.parentFile.nameXxx"),
+    checkHighlighting(
+      projectPom,
+      Highlight(text = "xxx"),
+      Highlight(text = "zzz"),
+      Highlight(text = "pom.maven.build.timestamp"),
+      Highlight(text = "parent.maven.build.timestamp"),
+      Highlight(text = "baseUri"),
+      Highlight(text = "unknownProperty"),
+      Highlight(text = "project.version.bar"),
+      Highlight(text = "project.parentFile.nameXxx"),
     )
 
   }
@@ -1014,8 +1113,12 @@ class MavenPropertyCompletionAndResolutionTest : MavenDomTestCase() {
     assertContain(variants, "artifactId", "project.artifactId", "pom.artifactId")
     assertContain(variants, "basedir", "project.basedir", "pom.basedir", "project.baseUri", "pom.basedir")
     assertDoNotContain(variants, "baseUri")
+    assertContain(variants, "build.timestamp")
     assertContain(variants, "maven.build.timestamp")
     assertContain(variants, "maven.multiModuleProjectDirectory")
+    assertContain(variants, "maven.home")
+    assertContain(variants, "maven.version")
+    assertContain(variants, "maven.build.version")
     assertDoNotContain(variants, "project.maven.build.timestamp")
     assertContain(variants, "settingsXmlProp")
     assertContain(variants, "settings.localRepository")

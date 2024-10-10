@@ -27,12 +27,7 @@ class K1KotlinCodeFragmentCompiler : KotlinCodeFragmentCompiler {
     ): CompiledCodeFragmentData {
         val debugProcess = context.debugProcess
 
-        // TODO remove this registry key?
-        val compilerStrategy = if (CodeFragmentCompiler.useIRFragmentCompiler()) {
-            IRCodeFragmentCompilingStrategy(codeFragment)
-        } else {
-            OldCodeFragmentCompilingStrategy(codeFragment)
-        }
+        val compilerStrategy = IRCodeFragmentCompilingStrategy(codeFragment)
         try {
             patchCodeFragment(context, codeFragment, compilerStrategy.stats)
         } catch (e: Exception) {
@@ -79,7 +74,7 @@ class K1KotlinCodeFragmentCompiler : KotlinCodeFragmentCompiler {
 
         val resolutionFacade = getResolutionFacadeForCodeFragment(codeFragment)
 
-        DebugLabelPropertyDescriptorProvider(codeFragment, debugProcess).supplyDebugLabels()
+        DebugForeignPropertyDescriptorProvider(codeFragment, debugProcess).supplyDebugForeignProperties()
 
         val analysisResult = resolutionFacade.analyzeWithAllCompilerChecks(codeFragment)
 
@@ -122,6 +117,7 @@ class K1KotlinCodeFragmentCompiler : KotlinCodeFragmentCompiler {
 private val IGNORED_DIAGNOSTICS: Set<DiagnosticFactory<*>> = Errors.INVISIBLE_REFERENCE_DIAGNOSTICS +
         setOf(
             Errors.OPT_IN_USAGE_ERROR,
+            Errors.OPT_IN_TO_INHERITANCE_ERROR,
             Errors.MISSING_DEPENDENCY_SUPERCLASS,
             Errors.IR_WITH_UNSTABLE_ABI_COMPILED_CLASS,
             Errors.FIR_COMPILED_CLASS,

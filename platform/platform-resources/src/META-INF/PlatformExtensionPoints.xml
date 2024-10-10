@@ -19,6 +19,8 @@
       <with attribute="instance" implements="com.intellij.openapi.options.Configurable"/>
     </extensionPoint>
 
+    <extensionPoint name="eelProvider" interface="com.intellij.platform.eel.provider.EelProvider" dynamic="true"/>
+
     <extensionPoint name="applicationConfigurable"
                     dynamic="true"
                     beanClass="com.intellij.openapi.options.ConfigurableEP">
@@ -590,5 +592,8 @@
                     dynamic="true">
       <with attribute="service" implements="com.intellij.openapi.components.PersistentStateComponent"/>
     </extensionPoint>
+    <extensionPoint name="genericAuthProvider"
+                    interface="com.intellij.auth.GenericAuthProviderExtension" dynamic="true"/>
+
   </extensionPoints>
 </idea-plugin>

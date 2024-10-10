@@ -60,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -67,7 +68,7 @@ final class PassExecutorService implements Disposable {
   static final Logger LOG = Logger.getInstance(PassExecutorService.class);
   private static final boolean CHECK_CONSISTENCY = ApplicationManager.getApplication().isUnitTestMode();
 
-  private final Map<ScheduledPass, Job<Void>> mySubmittedPasses = new ConcurrentHashMap<>();
+  private final AtomicReference<@NotNull Map<ScheduledPass, Job>> mySubmittedPasses = new AtomicReference<>(new ConcurrentHashMap<>());
   private final Project myProject;
   private volatile boolean isDisposed;
 
@@ -101,15 +102,17 @@ final class PassExecutorService implements Disposable {
       // must not wait in EDT because waitFor() might inadvertently steal some work from FJP and try to run it and fail with "must not execute in EDT"
       ThreadingAssertions.assertBackgroundThread();
     }
+    // there's a bug in CHM which leads to very slow .clear() after many puts (see e.g. IJPL-163472 Freeze in DaemonListeners$MyApplicationListener.writeActionFinished). So we toss the old CHM and replace with the new
+    Map<? extends ScheduledPass, ? extends Job> submittedPasses = mySubmittedPasses.getAndSet(new ConcurrentHashMap<>());
     try {
-      for (Map.Entry<ScheduledPass, Job<Void>> entry : mySubmittedPasses.entrySet()) {
-        Job<Void> job = entry.getValue();
+      for (Map.Entry<? extends ScheduledPass, ? extends Job> entry : submittedPasses.entrySet()) {
+        Job job = entry.getValue();
         ScheduledPass pass = entry.getKey();
         pass.myUpdateProgress.cancel(reason);
         job.cancel();
       }
       if (waitForTermination) {
-        while (!waitFor(50)) {
+        while (!waitFor(50, submittedPasses)) {
           int i = 0;
         }
       }
@@ -121,9 +124,6 @@ final class PassExecutorService implements Disposable {
     }
     catch (Throwable throwable) {
       LOG.error(throwable);
-    }
-    finally {
-      mySubmittedPasses.clear();
     }
   }
 
@@ -183,7 +183,7 @@ final class PassExecutorService implements Disposable {
     }
 
     for (ScheduledPass dependentPass : dependentPasses) {
-      mySubmittedPasses.put(dependentPass, Job.nullJob());
+      mySubmittedPasses.get().put(dependentPass, Job.nullJob());
     }
     for (ScheduledPass freePass : freePasses) {
       submit(freePass);
@@ -266,6 +266,7 @@ final class PassExecutorService implements Disposable {
                                                      @NotNull List<ScheduledPass> dependentPasses,
                                                      @NotNull DaemonProgressIndicator updateProgress,
                                                      @NotNull AtomicInteger threadsToStartCountdown) {
+    ProgressManager.checkCanceled();
     int passId = pass.getId();
     ScheduledPass scheduledPass = toBeSubmitted.get(passId);
     if (scheduledPass != null) return scheduledPass;
@@ -296,6 +297,7 @@ final class PassExecutorService implements Disposable {
     }
 
     if (pass.isRunIntentionPassAfter() && fileEditor instanceof TextEditor text) {
+      ProgressManager.checkCanceled();
       Editor editor = text.getEditor();
       ShowIntentionsPass ip = new ShowIntentionsPass(psiFile, editor, false);
       assignUniqueId(ip, id2Pass);
@@ -331,7 +333,7 @@ final class PassExecutorService implements Disposable {
 
   private void submit(@NotNull ScheduledPass pass) {
     if (!pass.myUpdateProgress.isCanceled()) {
-      Job<Void> job = JobLauncher.getInstance().submitToJobThread(pass, future -> {
+      Job job = JobLauncher.getInstance().submitToJobThread(pass, future -> {
         try {
           if (!future.isCancelled()) { // for canceled task .get() generates CancellationException which is expensive
             future.get();
@@ -346,7 +348,7 @@ final class PassExecutorService implements Disposable {
           }
         }
       });
-      mySubmittedPasses.put(pass, job);
+      mySubmittedPasses.get().put(pass, job);
     }
   }
 
@@ -544,7 +546,7 @@ final class PassExecutorService implements Disposable {
   }
 
   private void clearStaleEntries() {
-    mySubmittedPasses.keySet().removeIf(pass -> pass.myUpdateProgress.isCanceled());
+    mySubmittedPasses.get().keySet().removeIf(pass -> pass.myUpdateProgress.isCanceled());
   }
 
   private void repaintErrorStripeAndIcon(@NotNull FileEditor fileEditor) {
@@ -561,7 +563,7 @@ final class PassExecutorService implements Disposable {
 
   @NotNull
   List<HighlightingPass> getAllSubmittedPasses() {
-    return ContainerUtil.mapNotNull(mySubmittedPasses.keySet(),
+    return ContainerUtil.mapNotNull(mySubmittedPasses.get().keySet(),
                                     scheduledPass -> scheduledPass.myUpdateProgress.isCanceled() ? null : scheduledPass.myPass);
   }
 
@@ -593,9 +595,12 @@ final class PassExecutorService implements Disposable {
 
   // return true if terminated
   boolean waitFor(long millis) {
+    return waitFor(millis, mySubmittedPasses.get());
+  }
+  private boolean waitFor(long millis, @NotNull Map<? extends ScheduledPass, ? extends Job> map) {
     long deadline = System.currentTimeMillis() + millis;
     try {
-      for (Job<Void> job : mySubmittedPasses.values()) {
+      for (Job job : map.values()) {
         if (!job.waitForCompletion((int)(System.currentTimeMillis() - deadline))) {
           return false;
         }

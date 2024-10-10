@@ -130,6 +130,8 @@
     <applicationService serviceInterface="com.intellij.openapi.keymap.KeymapManager"
                         serviceImplementation="com.intellij.openapi.keymap.impl.KeymapManagerImpl"/>
 
+    <eelProvider implementation="com.intellij.execution.wsl.ijent.nio.toggle.IjentWslNioFsToggler$WslEelProvider"/>
+
     <applicationService serviceInterface="com.intellij.openapi.project.ProjectManager"
                         serviceImplementation="com.intellij.openapi.project.impl.ProjectManagerImpl"
                         testServiceImplementation="com.intellij.project.TestProjectManager"/>
@@ -239,6 +241,8 @@
                         serviceImplementation="com.intellij.ide.actions.ShowSettingsUtilImpl"/>
     <applicationService serviceInterface="com.intellij.openapi.help.HelpManager"
                         serviceImplementation="com.intellij.help.impl.HelpManagerImpl"/>
+    <applicationService serviceInterface="com.intellij.openapi.help.KeymapHelpIdPresenter"
+                        serviceImplementation="com.intellij.help.impl.KeymapHelpIdPresenterImpl"/>
     <applicationService serviceInterface="com.intellij.openapi.fileChooser.FileChooserFactory"
                         serviceImplementation="com.intellij.openapi.fileChooser.impl.FileChooserFactoryImpl"/>
     <applicationService serviceInterface="com.intellij.openapi.fileChooser.ClientFileChooserFactory"
@@ -304,6 +308,12 @@
                         serviceImplementation="com.intellij.ui.content.ContentFactoryImpl"/>
     <applicationService serviceInterface="com.intellij.ui.TreeUIHelper"
                         serviceImplementation="com.intellij.ui.TreeUIHelperImpl"/>
+    <applicationService serviceInterface="com.intellij.ui.treeStructure.TreeDomainModelFactory"
+                        serviceImplementation="com.intellij.ui.tree.TreeDomainModelFactoryImpl"/>
+    <applicationService serviceInterface="com.intellij.ui.treeStructure.TreeViewModelFactory"
+                        serviceImplementation="com.intellij.ui.tree.TreeViewModelFactoryImpl"/>
+    <applicationService serviceInterface="com.intellij.ui.treeStructure.TreeSwingModelFactory"
+                        serviceImplementation="com.intellij.ui.tree.TreeSwingModelFactoryImpl"/>
     <applicationService serviceInterface="com.intellij.ui.ExpandableItemsHandlerFactory"
                         serviceImplementation="com.intellij.ui.ExpandableItemsHandlerFactoryImpl"/>
     <applicationService serviceInterface="com.intellij.ui.components.JBHtmlPane$ImplService"
@@ -381,7 +391,7 @@
     <diff.DiffExtension implementation="com.intellij.diff.actions.ShowBlankDiffWindowDiffExtension"/>
 
     <projectService serviceInterface="com.intellij.diff.editor.DiffEditorTabFilesManager"
-                    serviceImplementation="com.intellij.diff.editor.DefaultDiffTabFilesManager"/>
+                    serviceImplementation="com.intellij.diff.editor.DiffEditorTabFilesManagerImpl"/>
 
     <daemon.highlightInfoFilter implementation="com.intellij.codeInsight.daemon.OutsidersPsiFileSupport$HighlightFilter"/>
     <daemon.intentionActionFilter implementation="com.intellij.codeInsight.daemon.OutsidersPsiFileSupport$IntentionFilter"/>
@@ -482,18 +492,6 @@
                         serviceImplementation="com.intellij.concurrency.AsyncFutureFactoryImpl"/>
 
     <applicationService serviceImplementation="com.intellij.openapi.keymap.impl.DefaultKeymap"/>
-
-    <applicationService serviceInterface="com.intellij.ide.passwordSafe.PasswordSafe"
-                        serviceImplementation="com.intellij.ide.passwordSafe.impl.PasswordSafeImpl"
-                        testServiceImplementation="com.intellij.ide.passwordSafe.impl.TestPasswordSafeImpl"/>
-
-    <applicationConfigurable parentId="preferences.general" instance="com.intellij.credentialStore.PasswordSafeConfigurable"
-                             bundle="messages.CredentialStoreBundle"
-                             key="password.safe.configurable"
-                             id="application.passwordSafe"/>
-
-    <applicationService serviceInterface="com.intellij.credentialStore.CredentialStoreUiService"
-                        serviceImplementation="com.intellij.credentialStore.CredentialStoreUiServiceImpl"/>
 
     <applicationService serviceInterface="com.intellij.openapi.options.SchemeManagerFactory"
                         serviceImplementation="com.intellij.configurationStore.schemeManager.SchemeManagerFactoryBase$ApplicationSchemeManagerFactory"/>
@@ -892,7 +890,7 @@
     <config.inlaySettingsProvider implementation="com.intellij.codeInsight.hints.settings.providers.NewInlaySettingsProvider"/>
 
     <applicationService serviceInterface="com.intellij.internal.statistic.eventLog.StatisticsRegionUrlMapperService"
-                        serviceImplementation="com.intellij.ide.StatisticsRegionUrlMapperServiceImpl" preload="notLightEdit"/>
+                        serviceImplementation="com.intellij.internal.statistic.StatisticsRegionUrlMapperServiceImpl" preload="notLightEdit"/>
     <statistics.validation.customValidationRule
       implementation="com.intellij.configurationStore.statistic.eventLog.SettingsComponentNameValidator"/>
     <statistics.validation.customValidationRuleFactory implementation="com.intellij.configurationStore.statistic.eventLog.SettingsValueValidatorFactory"/>
@@ -912,6 +910,8 @@
     <statistics.projectUsagesCollector
       implementation="com.intellij.internal.statistic.collectors.fus.fileTypes.ProjectStructureUsageCollector"/>
     <statistics.projectUsagesCollector implementation="com.intellij.internal.statistic.collectors.fus.FacetTypeUsageCollector"/>
+    <statistics.projectUsagesCollector
+      implementation="com.intellij.internal.statistic.collectors.fus.otherIde.LaunchJsonUsagesCollector"/>
     <statistics.applicationUsagesCollector implementation="com.intellij.internal.statistic.collectors.fus.plugins.PluginsUsagesCollector"
                                            allowOnStartup="true"/>
     <statistics.applicationUsagesCollector
@@ -930,6 +930,8 @@
     <applicationActivity implementation="com.intellij.openapi.application.ImportOldConfigsUsagesCollector$Trigger"/>
     <statistics.applicationUsagesCollector
       implementation="com.intellij.internal.statistic.collectors.fus.RegistryApplicationUsagesCollector"/>
+    <statistics.applicationUsagesCollector
+      implementation="com.intellij.internal.statistic.collectors.fus.ToolkitInfoCollector"/>
     <statistics.projectUsagesCollector implementation="com.intellij.internal.statistic.collectors.fus.project.IndexableFilesCollector"/>
     <statistics.projectUsagesCollector
       implementation="com.intellij.internal.statistic.collectors.fus.project.IntelliJProjectUsageCollector"/>
@@ -1020,6 +1022,7 @@
     <statistics.counterUsagesCollector implementationClass="com.intellij.ide.util.projectWizard.LightweightNewProjectWizardCollector" />
     <statistics.counterUsagesCollector implementationClass="com.intellij.ide.projectWizard.NewProjectWizardCollector"/>
     <statistics.counterUsagesCollector implementationClass="com.intellij.ide.ui.experimental.ExperimentalUiCollector"/>
+    <statistics.counterUsagesCollector implementationClass="com.intellij.net.ssl.CertificateWarningStatisticsCollector"/>
     <statistics.validation.customValidationRule
       implementation="com.intellij.ide.projectWizard.NewProjectWizardCollector$GeneratorValidationRule"/>
 
@@ -1082,8 +1085,6 @@
 
     <search.topHitProvider implementation="com.intellij.ide.ui.OptionsTopHitProvider$ProjectLevelProvidersAdapter"/>
 
-    <applicationService serviceInterface="com.intellij.ide.util.TipAndTrickManager"
-                        serviceImplementation="com.intellij.ide.util.TipAndTrickManagerImpl"/>
     <postStartupActivity implementation="com.intellij.ide.ui.localization.statistics.StartupStatisticsListener"/>
     <postStartupActivity implementation="com.intellij.ide.actions.PowerSaveModeNotifier"/>
     <postStartupActivity implementation="com.intellij.ide.actions.EssentialHighlightingNotifier"/>
@@ -1272,7 +1273,7 @@
     <!-- Browsers -->
     <applicationService serviceInterface="com.intellij.ide.browsers.BrowserLauncher"
                         serviceImplementation="com.intellij.ide.browsers.BrowserLauncherImpl"/>
-    <applicationConfigurable groupId="tools" groupWeight="160" instance="com.intellij.ide.browsers.BrowserSettings"
+    <applicationConfigurable groupId="tools" instance="com.intellij.ide.browsers.BrowserSettings"
                              id="reference.settings.ide.settings.web.browsers"
                              key="browsers.settings" bundle="messages.IdeBundle"/>
     <stepsBeforeRunProvider implementation="com.intellij.ide.browsers.LaunchBrowserBeforeRunTaskProvider"/>
@@ -1283,13 +1284,13 @@
 
     <!-- Actions on Save -->
     <projectConfigurable groupId="tools"
-                         groupWeight="170"
                          provider="com.intellij.ide.actionsOnSave.ActionsOnSaveConfigurable$ActionsOnSaveConfigurableProvider"
                          id="actions.on.save"
                          bundle="messages.IdeBundle"
                          key="actions.on.save.page.title"
                          nonDefaultProject="false"/>
     <search.optionContributor implementation="com.intellij.ide.actionsOnSave.ActionsOnSaveSearchableOptionsContributor"/>
+    <applicationService serviceImplementation="com.intellij.codeInsight.actions.onSave.FormatOnSavePresentationService"/>
 
     <!--troubleshooting-->
     <generalTroubleInfoCollector implementation="com.intellij.ide.troubleshooting.AboutTroubleInfoCollector"/>
@@ -1581,7 +1582,6 @@
     <gotoActionAliasMatcher implementation="com.intellij.ide.util.gotoByName.LocalizedActionAliasMatcher"/>
 
     <backgroundPostStartupActivity implementation="com.intellij.accessibility.AccessibilityUsageTrackerCollector$CollectStatisticsTask"/>
-    <postStartupActivity implementation="com.intellij.accessibility.EnableScreenReaderSupportTask"/>
 
     <editorFactoryListener implementation="com.intellij.codeInsight.editorActions.ReaderModeEditorFactoryListener"/>
     <readerModeMatcher implementation="com.intellij.diff.actions.DiffReaderModeMatcher"/>
@@ -1681,6 +1681,9 @@
     <persistentFsConnectionListener implementation="com.intellij.openapi.vfs.impl.jar.ArchiveCachesCleaner"/>
     <applicationService serviceInterface="com.intellij.platform.ide.progress.TaskSupport"
                         serviceImplementation="com.intellij.openapi.progress.impl.PlatformTaskSupport" preload="true"/>
+    <applicationService serviceImplementation="com.intellij.openapi.progress.impl.TaskInfoEntityCollector" preload="true"/>
+    <projectService serviceImplementation="com.intellij.openapi.progress.impl.PerProjectTaskInfoEntityCollector" preload="true"/>
+
     <searchEverywhereContributor implementation="com.intellij.find.impl.TextSearchContributor$Companion$Factory"/>
 
     <applicationService serviceInterface="com.intellij.openapi.vfs.newvfs.persistent.FsRootDataLoader"
@@ -1842,6 +1845,13 @@
     <postStartupActivity implementation="com.intellij.execution.wsl.ijent.nio.toggle.IjentInProjectStarter"
                          os="windows"/>
     <applicationActivity implementation="com.intellij.ide.SwingTooltipManagerCustomizer"/>
+    <registryKey key="rhizome.progress"
+                 defaultValue="false"
+                 description="Progress will be reported and collected through Rhizome DB. See PlatformTaskSupport for more info"/>
+    <pluginRepositoryAuthProvider implementation="com.intellij.ide.plugins.auth.EnvironmentVariablePluginRepositoryAuthProvider" />
+    <applicationService serviceInterface="com.intellij.auth.GenericAuthService"
+                        serviceImplementation="com.intellij.auth.LocalGenericAuthService"
+                        client="local"/>
   </extensions>
 
   <applicationListeners>
@@ -1918,7 +1928,7 @@
               os="windows"/>
 
     <listener topic="com.intellij.ide.RegionSettings$RegionSettingsListener"
-              class="com.intellij.ide.StatisticsRegionSettingsListener"/>
+              class="com.intellij.internal.statistic.StatisticsRegionSettingsListener"/>
   </applicationListeners>
 
   <projectListeners>
@@ -1941,6 +1951,12 @@
     <xi:fallback/>
   </xi:include>
   <xi:include href="intellij.platform.kernel.xml">
+    <xi:fallback/>
+  </xi:include>
+  <xi:include href="intellij.platform.project.xml">
+    <xi:fallback/>
+  </xi:include>
+  <xi:include href="intellij.platform.ide.progress.xml">
     <xi:fallback/>
   </xi:include>
 </idea-plugin>

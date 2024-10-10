@@ -2,6 +2,7 @@
 package com.intellij.openapi.application.impl;
 
 import com.intellij.CommonBundle;
+import com.intellij.concurrency.ThreadContext;
 import com.intellij.configurationStore.StoreUtil;
 import com.intellij.diagnostic.ActivityCategory;
 import com.intellij.diagnostic.PluginException;
@@ -39,7 +40,6 @@ import com.intellij.platform.diagnostic.telemetry.IJTracer;
 import com.intellij.platform.diagnostic.telemetry.PlatformScopesKt;
 import com.intellij.platform.diagnostic.telemetry.TelemetryManager;
 import com.intellij.platform.diagnostic.telemetry.helpers.TraceKt;
-import com.intellij.platform.ide.bootstrap.StartupUtil;
 import com.intellij.psi.util.ReadActionCache;
 import com.intellij.ui.ComponentUtil;
 import com.intellij.util.*;
@@ -65,7 +65,9 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static com.intellij.ide.ShutdownKt.cancelAndJoinBlocking;
+import static com.intellij.openapi.application.ModalityKt.asContextElement;
 import static com.intellij.util.concurrency.AppExecutorUtil.propagateContext;
+import static com.intellij.util.concurrency.Propagation.isContextAwareComputation;
 
 @ApiStatus.Internal
 public final class ApplicationImpl extends ClientAwareComponentManager implements ApplicationEx, ReadActionListener, WriteActionListener {
@@ -243,13 +245,6 @@ public final class ApplicationImpl extends ClientAwareComponentManager implement
     return getThreadingSupport().isWriteIntentLocked();
   }
 
-  @Deprecated
-  @Override
-  public @NotNull ModalityInvokator getInvokator() {
-    PluginException.reportDeprecatedUsage("Application.getInvokator", "Use `invokeLater` instead");
-    return myInvokator;
-  }
-
   @Override
   public void invokeLater(@NotNull Runnable runnable) {
     invokeLater(runnable, getDisposed());
@@ -267,14 +262,19 @@ public final class ApplicationImpl extends ClientAwareComponentManager implement
 
   @Override
   public void invokeLater(@NotNull Runnable runnable, @NotNull ModalityState state, @NotNull Condition<?> expired) {
+    final boolean ctxAware = isContextAwareComputation(runnable);
+    // Start from inner layer: transaction guard
+    final Runnable guarded = myTransactionGuard.wrapLaterInvocation(runnable, state);
+    // Middle layer: lock and modality
+    final Runnable locked = wrapWithRunIntendedWriteActionAndModality(guarded, ctxAware ? null : state);
+    Runnable finalRunnable = locked;
+    // Outer layer, optional: context capture & reset
     if (propagateContext()) {
-      Pair<Runnable, Condition<?>> captured = Propagation.capturePropagationContext(runnable, expired);
-      runnable = captured.getFirst();
+      Pair<Runnable, Condition<?>> captured = Propagation.capturePropagationContext(locked, expired, runnable);
+      finalRunnable = captured.getFirst();
       expired = captured.getSecond();
     }
-    Runnable r = myTransactionGuard.wrapLaterInvocation(runnable, state);
-    // Don't need to enable implicit read, as Write Intent lock includes Explicit Read
-    LaterInvocator.invokeLater(state, expired, wrapWithRunIntendedWriteAction(r));
+    LaterInvocator.invokeLater(state, expired, finalRunnable);
   }
 
   @ApiStatus.Internal
@@ -303,7 +303,7 @@ public final class ApplicationImpl extends ClientAwareComponentManager implement
     }
 
     // Remove IW lock from EDT as EDT might be re-created, which might lead to deadlock if anybody uses this disposed app
-    if (!StartupUtil.isImplicitReadOnEDTDisabled() || isUnitTestMode()) {
+    if (isUnitTestMode()) {
       invokeLater(() -> releaseWriteIntentLock(), ModalityState.nonModal());
     }
 
@@ -389,11 +389,7 @@ public final class ApplicationImpl extends ClientAwareComponentManager implement
 
 
   @Override
-  public void invokeAndWait(@NotNull Runnable runnable, @NotNull ModalityState modalityState) {
-    if (isDispatchThread()) {
-      runIntendedWriteActionOnCurrentThread(runnable);
-      return;
-    }
+  public void invokeAndWait(@NotNull Runnable runnable, @NotNull ModalityState state) {
     if (EDT.isCurrentThreadEdt()) {
       runIntendedWriteActionOnCurrentThread(runnable);
       return;
@@ -403,24 +399,45 @@ public final class ApplicationImpl extends ClientAwareComponentManager implement
       throw new IllegalStateException("Calling invokeAndWait from read-action leads to possible deadlock.");
     }
 
-    Runnable capturingRunnable = AppImplKt.rethrowExceptions(AppScheduledExecutorService::captureContextCancellationForRunnableThatDoesNotOutliveContextScope, runnable);
+    final boolean ctxAware = isContextAwareComputation(runnable);
+    // Start from inner layer: transaction guard
+    final Runnable guarded = myTransactionGuard.wrapLaterInvocation(runnable, state);
+    // Middle layer: lock and modality
+    final Runnable locked = wrapWithRunIntendedWriteActionAndModality(guarded, ctxAware ? null : state);
+    // Outer layer context capture & reset
+    final Runnable finalRunnable = AppImplKt.rethrowExceptions(AppScheduledExecutorService::captureContextCancellationForRunnableThatDoesNotOutliveContextScope, locked);
 
-    Runnable r = myTransactionGuard.wrapLaterInvocation(capturingRunnable, modalityState);
-    LaterInvocator.invokeAndWait(modalityState, wrapWithRunIntendedWriteAction(r));
+    LaterInvocator.invokeAndWait(state, finalRunnable);
   }
 
-  private @NotNull Runnable wrapWithRunIntendedWriteAction(@NotNull Runnable runnable) {
-    return new Runnable() {
-      @Override
-      public void run() {
-        runIntendedWriteActionOnCurrentThread(runnable);
-      }
+  private @NotNull Runnable wrapWithRunIntendedWriteActionAndModality(@NotNull Runnable runnable, @Nullable ModalityState modalityState) {
+    return modalityState != null ?
+           new Runnable() {
+             @Override
+             public void run() {
+               try (AccessToken ignored = ThreadContext.installThreadContext(
+                 ThreadContext.currentThreadContext().plus(asContextElement(modalityState)), true)) {
+                 runIntendedWriteActionOnCurrentThread(runnable);
+               }
+             }
 
-      @Override
-      public String toString() {
-        return runnable.toString();
-      }
-    };
+             @Override
+             public String toString() {
+               return runnable.toString();
+             }
+           }
+                                 :
+           new Runnable() {
+             @Override
+             public void run() {
+               runIntendedWriteActionOnCurrentThread(runnable);
+             }
+
+             @Override
+             public String toString() {
+               return runnable.toString();
+             }
+           };
   }
 
   @Override
@@ -1093,7 +1110,6 @@ public final class ApplicationImpl extends ClientAwareComponentManager implement
                                                                                    (writeAccessAllowed ? " allowed" : "") +
                                                                                    ")" : "")
            + (isReadAccessAllowed() ? " (RA allowed)" : "")
-           + (StartupUtil.isImplicitReadOnEDTDisabled() ? " (IR on EDT disabled)" : "")
            + (isInImpatientReader() ? " (impatient reader)" : "")
            + (isExitInProgress() ? " (exit in progress)" : "")
       ;

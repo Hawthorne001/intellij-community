@@ -10,24 +10,18 @@ import com.intellij.execution.target.TargetEnvironmentConfiguration;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.extensions.ExtensionPointName;
 import com.intellij.openapi.module.Module;
-import com.intellij.openapi.progress.ProgressIndicator;
-import com.intellij.openapi.progress.ProgressManager;
-import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.projectRoots.SdkAdditionalData;
 import com.intellij.openapi.util.UserDataHolder;
-import com.intellij.openapi.util.io.FileUtilRt;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.PatternUtil;
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread;
 import com.intellij.util.containers.ContainerUtil;
-import com.jetbrains.python.PySdkBundle;
 import com.jetbrains.python.psi.LanguageLevel;
 import com.jetbrains.python.psi.icons.PythonPsiApiIcons;
 import com.jetbrains.python.run.CommandLinePatcher;
 import com.jetbrains.python.sdk.*;
-import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -39,7 +33,9 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
+import static com.jetbrains.python.sdk.PythonSdkUtilKtKt.tryResolvePath;
 import static com.jetbrains.python.sdk.flavors.PySdkFlavorUtilKt.getFileExecutionError;
+import static com.jetbrains.python.sdk.flavors.PySdkFlavorUtilKt.getFileExecutionErrorOnEdt;
 
 
 /**
@@ -167,7 +163,9 @@ public abstract class PythonSdkFlavor<D extends PyFlavorData> {
     if (executable != null) {
       return executable;
     }
-    var error = getErrorIfNotExecutable(fullPath, targetEnvConfig);
+    var error = SwingUtilities.isEventDispatchThread()
+                ? getFileExecutionErrorOnEdt(fullPath, targetEnvConfig)
+                : getFileExecutionError(fullPath, targetEnvConfig);
     if (error != null) {
       Logger.getInstance(PythonSdkFlavor.class).warn(String.format("%s is not executable: %s", fullPath, error));
     }
@@ -176,27 +174,6 @@ public abstract class PythonSdkFlavor<D extends PyFlavorData> {
     return newValue;
   }
 
-  @Nullable
-  @Nls
-  private static String getErrorIfNotExecutable(@NotNull String fullPath, @Nullable TargetEnvironmentConfiguration targetEnvConfig) {
-    if (SwingUtilities.isEventDispatchThread()) {
-      // Run under progress
-      // TODO: use pyModalBlocking when we merge two modules
-      return ProgressManager.getInstance()
-        .run(new Task.WithResult<@Nullable @Nls String, RuntimeException>(null, PySdkBundle.message("path.validation.wait.path", fullPath),
-                                                                          false) {
-          @Override
-          @Nls
-          @Nullable
-          protected String compute(@NotNull ProgressIndicator indicator) throws RuntimeException {
-            return getFileExecutionError(fullPath, targetEnvConfig);
-          }
-        });
-    }
-    else {
-      return getFileExecutionError(fullPath, targetEnvConfig);
-    }
-  }
 
   public static void clearExecutablesCache() {
     ourExecutableFiles.invalidateAll();
@@ -283,14 +260,14 @@ public abstract class PythonSdkFlavor<D extends PyFlavorData> {
   @Nullable
   public static PythonSdkFlavor<?> getFlavor(@Nullable String sdkPath) {
     if (sdkPath == null || PythonSdkUtil.isCustomPythonSdkHomePath(sdkPath)) return null;
-    return tryDetectFlavorByLocalPath(Path.of(sdkPath));
+    return tryDetectFlavorByLocalPath(sdkPath);
   }
 
   /**
    * Detects {@link PythonSdkFlavor} for local python path
    */
   @RequiresBackgroundThread(generateAssertion = false) //No warning yet as there are usages: to be fixed
-  public static @Nullable PythonSdkFlavor<?> tryDetectFlavorByLocalPath(@NotNull Path sdkPath) {
+  public static @Nullable PythonSdkFlavor<?> tryDetectFlavorByLocalPath(@NotNull String sdkPath) {
     // Iterate over all flavors starting with platform-independent (like venv): see `getApplicableFlavors` doc.
     // Order is important as venv must have priority over unix/windows
     for (PythonSdkFlavor<?> flavor : getApplicableFlavors(true)) {
@@ -311,15 +288,14 @@ public abstract class PythonSdkFlavor<D extends PyFlavorData> {
       return null;
     }
 
-    Path path = Path.of(sdkPath);
     for (PythonSdkFlavor<?> flavor : getPlatformIndependentFlavors()) {
-      if (flavor.isValidSdkPath(path)) {
+      if (flavor.isValidSdkPath(sdkPath)) {
         return flavor;
       }
     }
 
     for (PythonSdkFlavor<?> flavor : getPlatformFlavorsFromExtensions(true)) {
-      if (flavor.isValidSdkPath(path)) {
+      if (flavor.isValidSdkPath(sdkPath)) {
         return flavor;
       }
     }
@@ -329,11 +305,17 @@ public abstract class PythonSdkFlavor<D extends PyFlavorData> {
   /**
    * It only validates path for local target, hence use {@link #sdkSeemsValid(Sdk, PyFlavorData, TargetEnvironmentConfiguration)} instead
    */
-  public boolean isValidSdkPath(@NotNull Path path) {
+  public boolean isValidSdkPath(@NotNull String pathStr) {
+    Path path = tryResolvePath(pathStr);
+    if (path == null) {
+      return false;
+    }
+
     return Files.exists(path) && Files.isExecutable(path);
   }
 
   @Nullable
+  @RequiresBackgroundThread(generateAssertion = false) //because of process output
   public String getVersionString(@Nullable String sdkHome) {
     if (sdkHome == null) {
       return null;
@@ -394,6 +376,7 @@ public abstract class PythonSdkFlavor<D extends PyFlavorData> {
   }
 
   @NotNull
+  @RequiresBackgroundThread(generateAssertion = false) //because of process output
   public LanguageLevel getLanguageLevel(@NotNull String sdkHome) {
     return getLanguageLevelFromVersionString(getVersionString(sdkHome));
   }

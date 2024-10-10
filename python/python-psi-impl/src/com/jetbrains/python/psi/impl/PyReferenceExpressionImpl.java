@@ -18,7 +18,6 @@ import com.jetbrains.python.codeInsight.controlflow.PyTypeAssertionEvaluator;
 import com.jetbrains.python.codeInsight.controlflow.ReadWriteInstruction;
 import com.jetbrains.python.codeInsight.controlflow.ScopeOwner;
 import com.jetbrains.python.codeInsight.dataflow.scope.ScopeUtil;
-import com.jetbrains.python.codeInsight.typing.PyTypingTypeProvider;
 import com.jetbrains.python.psi.*;
 import com.jetbrains.python.psi.impl.references.PyImportReference;
 import com.jetbrains.python.psi.impl.references.PyQualifiedReference;
@@ -33,9 +32,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.function.Predicate;
 
-import static com.jetbrains.python.psi.PyUtil.as;
 import static com.jetbrains.python.psi.impl.PyCallExpressionHelper.getCalleeType;
-import static com.jetbrains.python.psi.types.PyTypeUtil.notNullToRef;
 
 /**
  * Implements reference expression PSI.
@@ -361,11 +358,8 @@ public class PyReferenceExpressionImpl extends PyElementImpl implements PyRefere
         boolean possiblyParameterizedQualifier = !(qualifierType instanceof PyModuleType || qualifierType instanceof PyImportedModuleType);
         if (possiblyParameterizedQualifier && PyTypeChecker.hasGenerics(type, context)) {
           if (qualifierType instanceof PyCollectionType collectionType && collectionType.isDefinition()) {
-            PyCollectionType genericDefinitionType = PyTypeChecker.findGenericDefinitionType(collectionType.getPyClass(), context);
-            if (genericDefinitionType != null && type != null) {
-              List<PyTypeParameterType> typeParameterTypes =
-                ContainerUtil.filterIsInstance(genericDefinitionType.getElementTypes(), PyTypeParameterType.class);
-              PyType typeWithSubstitutions = PyTypeChecker.trySubstituteByDefaultsOnly(type, typeParameterTypes, true, context);
+            if (type != null) {
+              PyType typeWithSubstitutions = PyTypeChecker.parameterizeType(type, List.of(), context);
               if (typeWithSubstitutions != null) {
                 return typeWithSubstitutions;
               }
@@ -373,20 +367,12 @@ public class PyReferenceExpressionImpl extends PyElementImpl implements PyRefere
           }
           final var substitutions = PyTypeChecker.unifyGenericCall(qualifier, Collections.emptyMap(), context);
           if (substitutions != null) {
-            var substitutionsWithDefaults = PyTypeChecker.getSubstitutionsWithDefaults(substitutions);
-            final PyType substituted = PyTypeChecker.substitute(type, substitutionsWithDefaults, context);
+            final PyType substituted = PyTypeChecker.substitute(type, substitutions, context);
             if (substituted != null) {
               return substituted;
             }
           }
         }
-      }
-    }
-
-    if (type instanceof PyClassType classType && !(type instanceof PyCollectionType)) {
-      PyType parameterizedType = PyTypingTypeProvider.tryParameterizeClassWithDefaults(classType, anchor, false, context);
-      if (parameterizedType instanceof PyCollectionType collectionType) {
-        return collectionType;
       }
     }
 
@@ -496,10 +482,11 @@ public class PyReferenceExpressionImpl extends PyElementImpl implements PyRefere
                var arguments = narrowedType.getOriginal().getArguments(null);
                if (!arguments.isEmpty()) {
                  var firstArgument = arguments.get(0);
-                 if (firstArgument instanceof PyReferenceExpression) {
+                 PyType type = narrowedType.getNarrowedType();
+                 if (firstArgument instanceof PyReferenceExpression && type != null) {
                    return PyTypeAssertionEvaluator.createAssertionType(
                      context.getType(firstArgument),
-                     narrowedType.getNarrowedType(),
+                     type,
                      conditionalInstruction.getResult() ^ narrowedType.getNegated(),
                      narrowedType.getTypeIs(),
                      context);

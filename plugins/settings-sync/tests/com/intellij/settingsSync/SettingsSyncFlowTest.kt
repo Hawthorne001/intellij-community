@@ -404,15 +404,6 @@ internal class SettingsSyncFlowTest : SettingsSyncTestBase() {
     }
   }
 
-  @Test
-  fun `unknown additional files should be sent to the server`() = timeoutRunBlockingAndStopBridge {
-    (settingsSyncStorage / ".metainfo" / "newformat.json").write("File with new unknown format")
-    initSettingsSync(SettingsSyncBridge.InitMode.PushToServer)
-
-    assertServerSnapshot {
-      additionalFile("newformat.json", "File with new unknown format")
-    }
-  }
 
   @TestFor(issues = ["IDEA-326189"])
   @Test
@@ -452,6 +443,22 @@ internal class SettingsSyncFlowTest : SettingsSyncTestBase() {
       }
     }
     Assertions.assertFalse(SettingsSyncSettings.getInstance().syncEnabled)
+  }
+
+  @TestFor(issues = ["IJPL-13361"])
+  @Test
+  fun `don't disable sync on startup if connection failed`() = timeoutRunBlockingAndStopBridge {
+    SettingsSyncSettings.getInstance().syncEnabled = true
+    (remoteCommunicator as MockRemoteCommunicator).isConnected = false
+    initSettingsSync(waitForInit = false)
+    Assertions.assertTrue(SettingsSyncSettings.getInstance().syncEnabled)
+    waitUntil("Waiting for bridge to initialize", 2.seconds) {
+      Assertions.assertTrue(SettingsSyncSettings.getInstance().syncEnabled)
+      bridge.isInitialized
+    }
+    Assertions.assertEquals(MockRemoteCommunicator.DISCONNECTED_ERROR, SettingsSyncStatusTracker.getInstance().getErrorMessage())
+
+
   }
 
   private fun syncSettingsAndWait(event: SyncSettingsEvent = SyncSettingsEvent.SyncRequest) {

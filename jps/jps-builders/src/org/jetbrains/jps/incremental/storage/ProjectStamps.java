@@ -2,17 +2,15 @@
 package org.jetbrains.jps.incremental.storage;
 
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.util.io.NioFiles;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jps.incremental.relativizer.PathRelativizerService;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 
-/**
- * @author Eugene Zhuravlev
- */
-public final class ProjectStamps {
+
+public final class ProjectStamps implements StorageOwner{
   public static final String PORTABLE_CACHES_PROPERTY = "org.jetbrains.jps.portable.caches";
   public static final boolean PORTABLE_CACHES = Boolean.getBoolean(PORTABLE_CACHES_PROPERTY);
 
@@ -21,44 +19,37 @@ public final class ProjectStamps {
 
   private static final Logger LOG = Logger.getInstance(ProjectStamps.class);
 
-  private final StampsStorage<? extends StampsStorage.Stamp> stampStorage;
+  private final FileTimestampStorage stampStorage;
 
-  public ProjectStamps(Path dataStorageRoot, BuildTargetsState targetsState, PathRelativizerService relativizer) throws IOException {
-    if (PORTABLE_CACHES) {
-      stampStorage = new HashStampStorage(dataStorageRoot, relativizer, targetsState);
-    }
-    else {
-      stampStorage = new FileTimestampStorage(dataStorageRoot, targetsState);
-    }
+  public ProjectStamps(@NotNull Path dataStorageRoot, @NotNull BuildTargetsState targetsState) throws IOException {
+    stampStorage = new FileTimestampStorage(dataStorageRoot, targetsState);
   }
 
   /**
-   * @deprecated Please use {@link #ProjectStamps(Path, BuildTargetsState, PathRelativizerService)}
+   * @deprecated Please use {@link #ProjectStamps(Path, BuildTargetsState)}
    */
+  @SuppressWarnings("unused")
   @Deprecated
   public ProjectStamps(File dataStorageRoot, BuildTargetsState targetsState, PathRelativizerService relativizer) throws IOException {
-    this(dataStorageRoot.toPath(), targetsState, relativizer);
+    this(dataStorageRoot.toPath(), targetsState);
   }
 
-  public StampsStorage<? extends StampsStorage.Stamp> getStampStorage() {
+  public @NotNull StampsStorage<?> getStampStorage() {
     return stampStorage;
   }
 
-  public void clean() {
-    stampStorage.wipe();
+  @Override
+  public void flush(boolean memoryCachesOnly) {
+    stampStorage.flush(memoryCachesOnly);
   }
 
-  public void close() {
-    try {
-      stampStorage.close();
-    }
-    catch (IOException e) {
-      LOG.error(e);
-      try {
-        NioFiles.deleteRecursively(stampStorage.getStorageRoot());
-      }
-      catch (IOException ignore) {
-      }
-    }
+  @Override
+  public void clean() throws IOException {
+    stampStorage.clean();
+  }
+
+  @Override
+  public void close() throws IOException {
+    stampStorage.close();
   }
 }

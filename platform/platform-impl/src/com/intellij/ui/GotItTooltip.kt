@@ -23,6 +23,7 @@ import com.intellij.util.Alarm
 import com.intellij.util.SystemProperties
 import com.intellij.util.ui.JBInsets
 import com.intellij.util.ui.PositionTracker
+import org.jetbrains.annotations.ApiStatus
 import org.jetbrains.annotations.Nls
 import org.jetbrains.annotations.NonNls
 import java.awt.Component
@@ -37,6 +38,7 @@ import javax.swing.JComponent
 import javax.swing.SwingUtilities
 import javax.swing.event.AncestorEvent
 
+@ApiStatus.Internal
 @Service(Service.Level.APP)
 class GotItTooltipService {
   val isFirstRun: Boolean = checkFirstRun()
@@ -68,9 +70,9 @@ class GotItTooltipService {
  * The description of the tooltip can contain inline shortcuts, icons and links.
  * See [GotItTextBuilder] doc for more info.
  */
-class GotItTooltip internal constructor(@NonNls val id: String,
-                                        private val gotItBuilder: GotItComponentBuilder,
-                                        parentDisposable: Disposable? = null) : ToolbarActionTracker<Balloon>() {
+class GotItTooltip @ApiStatus.Internal constructor(@NonNls val id: String,
+                                                   private val gotItBuilder: GotItComponentBuilder,
+                                                   parentDisposable: Disposable? = null) : ToolbarActionTracker<Balloon>() {
   private var timeout: Int = -1
   private var maxCount = 1
   private var onBalloonCreated: (Balloon) -> Unit = {}

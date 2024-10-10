@@ -453,6 +453,16 @@ public abstract class LocalInspectionTestGenerated extends AbstractLocalInspecti
                 runTest("testData/inspectionsLocal/branched/ifThenToElvis/nullCheckWithSelectorCallChain.kt");
             }
 
+            @TestMetadata("nullabilityInReceiversOfBaseCause.kt")
+            public void testNullabilityInReceiversOfBaseCause() throws Exception {
+                runTest("testData/inspectionsLocal/branched/ifThenToElvis/nullabilityInReceiversOfBaseCause.kt");
+            }
+
+            @TestMetadata("nullabilityInReceiversOfBaseCause1.kt")
+            public void testNullabilityInReceiversOfBaseCause1() throws Exception {
+                runTest("testData/inspectionsLocal/branched/ifThenToElvis/nullabilityInReceiversOfBaseCause1.kt");
+            }
+
             @TestMetadata("nullableResultWithImplicitReceiver.kt")
             public void testNullableResultWithImplicitReceiver() throws Exception {
                 runTest("testData/inspectionsLocal/branched/ifThenToElvis/nullableResultWithImplicitReceiver.kt");
@@ -9869,6 +9879,11 @@ public abstract class LocalInspectionTestGenerated extends AbstractLocalInspecti
         @TestMetadata("string.kt")
         public void testString() throws Exception {
             runTest("testData/inspectionsLocal/redundantExplicitType/string.kt");
+        }
+
+        @TestMetadata("stringWrongRange.kt")
+        public void testStringWrongRange() throws Exception {
+            runTest("testData/inspectionsLocal/redundantExplicitType/stringWrongRange.kt");
         }
 
         @TestMetadata("top.kt")

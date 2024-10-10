@@ -6,9 +6,10 @@ import com.intellij.ide.HelpTooltip
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.actionSystem.ex.CustomComponentAction
-import com.intellij.openapi.actionSystem.impl.ActionButton
+import com.intellij.openapi.actionSystem.impl.ActionButtonWithText
 import com.intellij.openapi.actionSystem.impl.ActionToolbarImpl
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.toolbar.floating.AbstractFloatingToolbarComponent
 import com.intellij.openapi.editor.toolbar.floating.FloatingToolbarComponent
@@ -17,15 +18,17 @@ import com.intellij.openapi.editor.toolbar.floating.isInsideMainEditor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.ui.AnimatedIcon
-import com.intellij.ui.components.JBLabel
+import com.intellij.ui.PopupHandler
 import com.intellij.util.ui.JBUI
 import com.intellij.xdebugger.XDebuggerBundle
 import icons.PlatformDebuggerImplIcons
 import kotlinx.coroutines.*
 import java.awt.BorderLayout
+import java.awt.Component
 import javax.swing.Icon
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.SwingConstants
 import kotlin.time.Duration.Companion.seconds
 
 private val hotSwapIcon: Icon by lazy {
@@ -44,23 +47,30 @@ private fun createHelpTooltip(): HelpTooltip =
 
 private fun showFloatingToolbar(): Boolean = HotSwapUiExtension.computeSafeIfAvailable { it.showFloatingToolbar() } != false
 
+private fun collectPopupMenuActions(): DefaultActionGroup? = HotSwapUiExtension.computeSafeIfAvailable { it.popupMenuActions() }
+
 internal class HotSwapModifiedFilesAction : AnAction() {
   override fun actionPerformed(e: AnActionEvent) {
-    val session = findSessionIfReady(e.project) ?: return
+    val project = e.project ?: return
+    val session = findSession(project) ?: return
+    if (!session.hasChanges) return
+    HotSwapStatistics.logHotSwapCalled(project, HotSwapStatistics.HotSwapSource.RELOAD_MODIFIED_ACTION)
     HotSwapWithRebuildAction.performHotSwap(e.dataContext, session)
   }
 
   override fun update(e: AnActionEvent) {
+    val session = findSession(e.project)
+    e.presentation.isEnabled = session?.hasChanges == true
     e.presentation.isVisible = Registry.`is`("debugger.hotswap.floating.toolbar")
-    e.presentation.isEnabled = findSessionIfReady(e.project) != null
+    if (e.place != ActionPlaces.MAIN_MENU) {
+      e.presentation.isVisible = e.presentation.isVisible && session != null
+    }
     e.presentation.icon = hotSwapIcon
   }
 
-  private fun findSessionIfReady(project: Project?): HotSwapSession<*>? {
+  private fun findSession(project: Project?): HotSwapSession<*>? {
     if (project == null) return null
-    val session = HotSwapSessionManager.getInstance(project).currentSession ?: return null
-    if (session.currentStatus != HotSwapVisibleStatus.CHANGES_READY) return null
-    return session
+    return HotSwapSessionManager.getInstance(project).currentSession
   }
 
   override fun getActionUpdateThread() = ActionUpdateThread.BGT
@@ -76,6 +86,7 @@ private class HotSwapWithRebuildAction : AnAction(), CustomComponentAction {
   override fun actionPerformed(e: AnActionEvent) {
     val project = e.project ?: return
     val session = HotSwapSessionManager.getInstance(project).currentSession ?: return
+    HotSwapStatistics.logHotSwapCalled(project, HotSwapStatistics.HotSwapSource.RELOAD_MODIFIED_BUTTON)
     performHotSwap(e.dataContext, session)
   }
 
@@ -108,13 +119,14 @@ private class HotSwapToolbarComponent(action: AnAction, presentation: Presentati
 
   private val tooltip = createHelpTooltip()
     .setShortcut(ActionManager.getInstance().getKeyboardShortcut("XDebugger.Hotswap.Modified.Files"))
-  val button = ActionButton(action, presentation, place, ActionToolbar.DEFAULT_MINIMUM_BUTTON_SIZE).apply {
+  val button = ActionButtonWithText(action, presentation, place, ActionToolbar.DEFAULT_MINIMUM_BUTTON_SIZE).apply {
+    setHorizontalTextPosition(SwingConstants.LEADING)
     tooltip.installOn(this)
+    installPopupMenu()
   }
 
   init {
     isOpaque = false
-    add(JBLabel(XDebuggerBundle.message("xdebugger.hotswap.code.changed")), BorderLayout.WEST)
     add(button, BorderLayout.CENTER)
     tooltip.installOn(this)
   }
@@ -128,16 +140,31 @@ private class HotSwapToolbarComponent(action: AnAction, presentation: Presentati
     }
     presentation.icon = icon
     presentation.disabledIcon = icon
+    @Suppress("DialogTitleCapitalization")
+    presentation.text = XDebuggerBundle.message("xdebugger.hotswap.code.changed")
   }
 
 }
 
 private fun updateToolbarVisibility(project: Project) {
   HotSwapSessionManager.getInstance(project).coroutineScope.launch(Dispatchers.Default) {
+    // Hide toolbar after setting disable
     if (showFloatingToolbar()) return@launch
     HotSwapSessionManager.getInstance(project).notifyUpdate()
   }
 }
+
+private fun JComponent.installPopupMenu() {
+  addMouseListener(object : PopupHandler() {
+    override fun invokePopup(comp: Component?, x: Int, y: Int) {
+      val actions = collectPopupMenuActions() ?: return
+      val popupMenu = ActionManager.getInstance().createActionPopupMenu("HotSwapToolbarPopup", actions)
+      popupMenu.component.show(comp, x, y)
+    }
+  })
+}
+
+private val logger = logger<HotSwapFloatingToolbarProvider>()
 
 internal class HotSwapFloatingToolbarProvider : FloatingToolbarProvider {
   override val autoHideable: Boolean get() = false
@@ -158,6 +185,9 @@ internal class HotSwapFloatingToolbarProvider : FloatingToolbarProvider {
       component.showingTime = SHOWING_TIME_MS
       component.hidingTime = HIDING_TIME_MS
     }
+    if (component is JComponent) {
+      component.installPopupMenu()
+    }
     instance.addListener(ChangesListener(component, project), parentDisposable)
   }
 
@@ -168,17 +198,22 @@ internal class HotSwapFloatingToolbarProvider : FloatingToolbarProvider {
       // We need to hide the button even if the coroutineScope is cancelled
       manager.coroutineScope.launch(Dispatchers.EDT, start = CoroutineStart.ATOMIC) {
         if (!showFloatingToolbar()) {
+          if (logger.isDebugEnabled) {
+            logger.debug("Hide button because it is disabled")
+          }
           component.scheduleHide()
           return@launch
         }
         val session = manager.currentSession
         val status = forceStatus ?: session?.currentStatus
 
-        val action = when (status) {
+        if (logger.isDebugEnabled) {
+          logger.debug("Button status changed: $status")
+        }
+        when (status) {
           HotSwapVisibleStatus.IN_PROGRESS -> {
             hotSwapAction.status = HotSwapButtonStatus.IN_PROGRESS
             updateActions()
-            return@launch
           }
           HotSwapVisibleStatus.SUCCESS -> {
             hotSwapAction.status = HotSwapButtonStatus.SUCCESS
@@ -187,20 +222,18 @@ internal class HotSwapFloatingToolbarProvider : FloatingToolbarProvider {
               delay(NOTIFICATION_TIME_SECONDS.seconds)
               onStatusChanged(null)
             }
-            return@launch
           }
-          HotSwapVisibleStatus.NO_CHANGES -> HotSwapButtonAction.HIDE
-          HotSwapVisibleStatus.CHANGES_READY -> HotSwapButtonAction.SHOW
-          HotSwapVisibleStatus.SESSION_COMPLETED, HotSwapVisibleStatus.HIDDEN, null -> HotSwapButtonAction.HIDE_NOW
-        }
-        if (action == HotSwapButtonAction.SHOW) {
-          hotSwapAction.status = HotSwapButtonStatus.READY
-          updateActions()
-        }
-        when (action) {
-          HotSwapButtonAction.SHOW -> component.scheduleShow()
-          HotSwapButtonAction.HIDE -> component.scheduleHide()
-          HotSwapButtonAction.HIDE_NOW -> component.hideImmediately()
+          HotSwapVisibleStatus.NO_CHANGES -> {
+            component.scheduleHide()
+          }
+          HotSwapVisibleStatus.CHANGES_READY -> {
+            hotSwapAction.status = HotSwapButtonStatus.READY
+            updateActions()
+            component.scheduleShow()
+          }
+          HotSwapVisibleStatus.SESSION_COMPLETED, HotSwapVisibleStatus.HIDDEN, null -> {
+            component.hideImmediately()
+          }
         }
       }
     }
@@ -216,10 +249,6 @@ internal class HotSwapFloatingToolbarProvider : FloatingToolbarProvider {
     private const val SHOWING_TIME_MS = 500
     private const val HIDING_TIME_MS = 500
   }
-}
-
-private enum class HotSwapButtonAction {
-  SHOW, HIDE, HIDE_NOW
 }
 
 private class HideAction : AnAction() {

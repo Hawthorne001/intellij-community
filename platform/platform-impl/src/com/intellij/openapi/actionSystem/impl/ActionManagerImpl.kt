@@ -1,5 +1,5 @@
 // Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-@file:Suppress("ReplaceGetOrSet", "ReplacePutWithAssignment", "ReplaceJavaStaticMethodWithKotlinAnalog")
+@file:Suppress("ReplaceGetOrSet", "ReplacePutWithAssignment", "ReplaceJavaStaticMethodWithKotlinAnalog", "OVERRIDE_DEPRECATION")
 
 package com.intellij.openapi.actionSystem.impl
 
@@ -7,7 +7,6 @@ import com.intellij.AbstractBundle
 import com.intellij.BundleBase
 import com.intellij.DynamicBundle
 import com.intellij.codeWithMe.ClientId
-import com.intellij.codeWithMe.ClientId.Companion.withClientId
 import com.intellij.concurrency.installThreadContext
 import com.intellij.diagnostic.PluginException
 import com.intellij.diagnostic.StartUpMeasurer
@@ -135,30 +134,16 @@ open class ActionManagerImpl protected constructor(private val coroutineScope: C
                       actionRegistrar = actionPreInitRegistrar)
 
     coroutineScope.launch {
-      val schema = CustomActionsSchema.getInstanceAsync()
-      for (url in schema.getActions()) {
-        schema.incrementModificationStamp()
-      }
+      CustomActionsSchema.getInstanceAsync().incrementModificationStamp()
     }
 
     this.keymapToOperations = keymapToOperations
 
-    val mutator = PreInitActionRuntimeRegistrar(idToAction = idToAction, actionRegistrar = actionPreInitRegistrar)
-
-    val heavyTasks = mutableListOf<ActionConfigurationCustomizer.CustomizeStrategy>()
-    ActionConfigurationCustomizer.EP.forEachExtensionSafe { extension ->
-      val customizeStrategy = extension.customize()
-      if (customizeStrategy is LightCustomizeStrategy) {
-        // same thread - mutator is not thread-safe by intention
-        // todo use plugin-aware coroutineScope
-        coroutineScope.launch(Dispatchers.Unconfined) {
-          customizeStrategy.customize(mutator)
-        }
-      }
-      else {
-        heavyTasks.add(customizeStrategy)
-      }
-    }
+    val heavyTasks = preInitRegistration(
+      idToAction = idToAction,
+      actionPreInitRegistrar = actionPreInitRegistrar,
+      coroutineScope = coroutineScope,
+    )
 
     // by intention, _after_ doRegisterActions
     actionPostInitRegistrar = PostInitActionRegistrar(idToAction = idToAction, boundShortcuts = boundShortcuts, state = state)
@@ -181,7 +166,7 @@ open class ActionManagerImpl protected constructor(private val coroutineScope: C
     }
 
     DYNAMIC_EP_NAME.forEachExtensionSafe { customizer ->
-      callDynamicRegistration(customizer, mutator)
+      callDynamicRegistration(customizer, actionPostInitRuntimeRegistrar)
     }
 
     DYNAMIC_EP_NAME.addExtensionPointListener(coroutineScope, object : ExtensionPointListener<DynamicActionConfigurationCustomizer> {
@@ -251,6 +236,7 @@ open class ActionManagerImpl protected constructor(private val coroutineScope: C
   }
 
   internal fun getKeymapPendingOperations(keymapName: String): List<KeymapShortcutOperation> {
+    @Suppress("RemoveRedundantQualifierName")
     return keymapToOperations.get(keymapName) ?: java.util.List.of()
   }
 
@@ -260,7 +246,7 @@ open class ActionManagerImpl protected constructor(private val coroutineScope: C
     }
 
     if (timer == null) {
-      timer = MyTimer(coroutineScope.childScope())
+      timer = MyTimer(coroutineScope.childScope(toString() + " timer"))
     }
 
     val wrappedListener = if (AppExecutorUtil.propagateContext() && listener !is CapturingListener) {
@@ -1474,7 +1460,7 @@ private fun <T> instantiate(stubClassName: String,
   catch (e: ProcessCanceledException) {
     throw e
   }
-  catch (e: ExtensionNotApplicableException) {
+  catch (_: ExtensionNotApplicableException) {
     return null
   }
   catch (e: Throwable) {
@@ -2335,4 +2321,28 @@ private fun registerOrReplaceActionInner(element: XmlElement,
     }
     onActionLoadedFromXml(actionId = id, plugin = plugin)
   }
+}
+
+private fun preInitRegistration(
+  idToAction: HashMap<String, AnAction>,
+  actionPreInitRegistrar: ActionPreInitRegistrar,
+  coroutineScope: CoroutineScope,
+): MutableList<ActionConfigurationCustomizer.CustomizeStrategy> {
+  val mutator = PreInitActionRuntimeRegistrar(idToAction = idToAction, actionRegistrar = actionPreInitRegistrar)
+
+  val heavyTasks = mutableListOf<ActionConfigurationCustomizer.CustomizeStrategy>()
+  ActionConfigurationCustomizer.EP.forEachExtensionSafe { extension ->
+    val customizeStrategy = extension.customize()
+    if (customizeStrategy is LightCustomizeStrategy) {
+      // same thread - mutator is not thread-safe by intention
+      // todo use plugin-aware coroutineScope
+      coroutineScope.launch(Dispatchers.Unconfined) {
+        customizeStrategy.customize(mutator)
+      }
+    }
+    else {
+      heavyTasks.add(customizeStrategy)
+    }
+  }
+  return heavyTasks
 }

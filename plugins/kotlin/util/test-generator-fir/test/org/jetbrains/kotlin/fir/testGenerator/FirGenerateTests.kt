@@ -1,4 +1,4 @@
-// Copyright 2000-2023 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.fir.testGenerator
 
@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.idea.fir.completion.kmpBasic.AbstractKotlinKmpComple
 import org.jetbrains.kotlin.idea.fir.completion.test.handlers.*
 import org.jetbrains.kotlin.idea.fir.completion.wheigher.AbstractHighLevelWeigherTest
 import org.jetbrains.kotlin.idea.fir.copyPaste.AbstractFirLiteralKotlinToKotlinCopyPasteTest
+import org.jetbrains.kotlin.idea.fir.copyPaste.AbstractFirKotlinToKotlinMultiDollarStringsCopyPasteTest
 import org.jetbrains.kotlin.idea.fir.copyPaste.AbstractFirLiteralTextToKotlinCopyPasteTest
 import org.jetbrains.kotlin.idea.fir.documentation.AbstractFirQuickDocMultiplatformTest
 import org.jetbrains.kotlin.idea.fir.documentation.AbstractFirQuickDocTest
@@ -31,7 +32,6 @@ import org.jetbrains.kotlin.idea.fir.imports.AbstractFirJvmOptimizeImportsTest
 import org.jetbrains.kotlin.idea.fir.imports.AbstractK2AutoImportTest
 import org.jetbrains.kotlin.idea.fir.imports.AbstractK2FilteringAutoImportTest
 import org.jetbrains.kotlin.idea.fir.kmp.AbstractK2KmpLightFixtureHighlightingTest
-import org.jetbrains.kotlin.idea.fir.low.level.api.AbstractFirLibraryModuleDeclarationResolveTest
 import org.jetbrains.kotlin.idea.fir.navigation.AbstractFirGotoDeclarationTest
 import org.jetbrains.kotlin.idea.fir.navigation.AbstractFirGotoRelatedSymbolMultiModuleTest
 import org.jetbrains.kotlin.idea.fir.navigation.AbstractFirGotoTest
@@ -40,6 +40,7 @@ import org.jetbrains.kotlin.idea.fir.parameterInfo.AbstractFirParameterInfoTest
 import org.jetbrains.kotlin.idea.fir.projectView.AbstractK2ProjectViewTest
 import org.jetbrains.kotlin.idea.fir.resolve.*
 import org.jetbrains.kotlin.idea.fir.search.AbstractHLImplementationSearcherTest
+import org.jetbrains.kotlin.idea.fir.search.AbstractKotlinBuiltInsResolveScopeEnlargerTest
 import org.jetbrains.kotlin.idea.fir.search.AbstractScopeEnlargerTest
 import org.jetbrains.kotlin.idea.fir.shortenRefs.AbstractFirShortenRefsTest
 import org.jetbrains.kotlin.idea.k2.copyright.AbstractFirUpdateKotlinCopyrightTest
@@ -125,12 +126,6 @@ private fun assembleWorkspace(): TWorkspace = workspace(KotlinPluginMode.K2) {
         }
     }
 
-    testGroup("fir-low-level-api-ide-impl") {
-        testClass<AbstractFirLibraryModuleDeclarationResolveTest> {
-            model("libraryModuleResolve", isRecursive = false)
-        }
-    }
-
     testGroup("fir/tests", testDataPath = "../../idea/tests/testData", category = CODE_INSIGHT) {
         testClass<AbstractK2AddImportActionTest> {
             model("idea/actions/kotlinAddImportAction", pattern = KT_WITHOUT_DOTS)
@@ -187,6 +182,10 @@ private fun assembleWorkspace(): TWorkspace = workspace(KotlinPluginMode.K2) {
 
         testClass<AbstractFirLiteralKotlinToKotlinCopyPasteTest> {
             model("copyPaste/literal", pattern = Patterns.forRegex("""^([^.]+)\.kt$"""))
+        }
+
+        testClass<AbstractFirKotlinToKotlinMultiDollarStringsCopyPasteTest> {
+            model("copyPaste/multiDollar", pattern = Patterns.forRegex("""^([^.]+)\.kt$"""))
         }
 
         testClass<AbstractFirShortenRefsTest> {
@@ -438,6 +437,10 @@ private fun assembleWorkspace(): TWorkspace = workspace(KotlinPluginMode.K2) {
 
         testClass<AbstractScopeEnlargerTest> {
             model("search/scopeEnlarger", pattern = KT_WITHOUT_DOTS)
+        }
+
+        testClass<AbstractKotlinBuiltInsResolveScopeEnlargerTest> {
+            model("search/builtInsScopeEnlarger", pattern = KT_WITHOUT_DOTS)
         }
 
         testClass<AbstractK2MultiModuleHighlightingTest> {

@@ -133,7 +133,7 @@ internal class TerminalBlocksDecorator(
 
     // add additional empty space on top of the block if it is the first block
     val topRenderer = EmptyWidthInlayRenderer {
-      val additionalInset = if (outputModel.blocks[0] === block) TerminalUi.blocksGap else 0
+      val additionalInset = if (outputModel.blocks[0] === block) 0 else 1
       TerminalUi.blockTopInset + additionalInset
     }
     val topInlay = editor.inlayModel.addBlockElement(block.startOffset, false, true, 1, topRenderer)!!
@@ -293,7 +293,7 @@ internal class TerminalBlocksDecorator(
       val width = JBUI.scale(TerminalUi.cornerToBlockInset)
       val oldColor = g.color
       try {
-        g.color = editor.colorsScheme.getColor(BlockTerminalColors.DEFAULT_BACKGROUND)
+        g.color = TerminalUi.defaultBackground(editor)
         g.fillRect(visibleArea.width - width, visibleArea.y, width, visibleArea.height)
       }
       finally {

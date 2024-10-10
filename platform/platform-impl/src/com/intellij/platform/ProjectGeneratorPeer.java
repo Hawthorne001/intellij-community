@@ -2,6 +2,7 @@
 package com.intellij.platform;
 
 import com.intellij.ide.util.projectWizard.SettingsStep;
+import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.openapi.ui.ValidationInfo;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -9,13 +10,22 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.*;
 
 public interface ProjectGeneratorPeer<T> {
-
   /**
    * Returns a new project settings component.
    * If a component is a dialog panel from Kotlin DSL UI, its validation state will be used
    */
+  default @NotNull JComponent getComponent(final @NotNull TextFieldWithBrowseButton myLocationField, final @NotNull Runnable checkValid) {
+    return getComponent();
+  }
+
+  /**
+   * @deprecated implement {@link #getComponent(TextFieldWithBrowseButton, Runnable)} instead
+   */
+  @Deprecated
   @NotNull
-  JComponent getComponent();
+  default JComponent getComponent() {
+    throw new RuntimeException("Do not use this method, use the one above instead");
+  }
 
   void buildUI(@NotNull SettingsStep settingsStep);
 
@@ -26,7 +36,7 @@ public interface ProjectGeneratorPeer<T> {
   T getSettings();
 
   /**
-   * if {@link #getComponent()} is Kotlin DSL UI panel, then it will also be validated,
+   * if {@link #getComponent(TextFieldWithBrowseButton, Runnable)} is Kotlin DSL UI panel, then it will also be validated,
    * and this method must check only things not covered by the panel.
    *
    * @return {@code null} if OK.

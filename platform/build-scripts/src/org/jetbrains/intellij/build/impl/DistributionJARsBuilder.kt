@@ -434,7 +434,7 @@ internal suspend fun buildNonBundledPlugins(
       val destFile = targetDirectory.resolve("${plugin.directoryName}-$pluginVersion.zip")
       val pluginXml = moduleOutputPatcher.getPatchedPluginXml(plugin.mainModule)
       pluginSpecs.add(PluginRepositorySpec(destFile, pluginXml))
-      dirToJar.add(NonBundledPlugin(pluginDirOrFile, destFile, !plugin.enableSymlinksAndExecutableResources))
+      dirToJar.add(NonBundledPlugin(sourceDir = pluginDirOrFile, targetZip = destFile, optimizedZip = !plugin.enableSymlinksAndExecutableResources))
     }
 
     archivePlugins(items = dirToJar, compress = compressPluginArchive, withBlockMap = compressPluginArchive, context = context)
@@ -1274,11 +1274,11 @@ private fun archivePlugin(optimized: Boolean, target: Path, compress: Boolean, s
       ZipArchiver(zipCreator).use { archiver ->
         if (Files.isDirectory(source)) {
           archiver.setRootDir(source, source.fileName.toString())
-          archiveDir(startDir = source, archiver = archiver, excludes = null, indexWriter = null)
+          archiveDir(startDir = source, addFile = { archiver.addFile(it) })
         }
         else {
           archiver.setRootDir(source.parent)
-          archiver.addFile(source, indexWriter = null)
+          archiver.addFile(source)
         }
       }
     }

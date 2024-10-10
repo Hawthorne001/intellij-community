@@ -15,8 +15,8 @@ import com.intellij.debugger.jdi.ThreadReferenceProxyImpl;
 import com.intellij.debugger.jdi.VirtualMachineProxyImpl;
 import com.intellij.debugger.settings.DebuggerSettings;
 import com.intellij.openapi.Disposable;
-import com.intellij.openapi.diagnostic.Attachment;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.CheckedDisposable;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.xdebugger.frame.XExecutionStack;
 import com.intellij.xdebugger.frame.XSuspendContext;
@@ -96,7 +96,14 @@ public abstract class SuspendContextImpl extends XSuspendContext implements Susp
     myVotesToVote = eventVotes;
     myEventSet = set;
     myDebugId = debugId;
-    Disposer.register(debugProcess.disposable, this);
+    CheckedDisposable disposable = debugProcess.disposable;
+    if (disposable.isDisposed()) {
+      // could be due to VM death
+      Disposer.dispose(this);
+    }
+    else {
+      Disposer.register(disposable, this);
+    }
   }
 
   public VirtualMachineProxyImpl getVirtualMachineProxy() {
@@ -132,7 +139,7 @@ public abstract class SuspendContextImpl extends XSuspendContext implements Susp
   }
 
   private void setThread(@Nullable ThreadReferenceProxyImpl threadProxy) {
-    if (threadProxy != null && myThread != threadProxy) { // do not add more than once
+    if (threadProxy != null && myThread != threadProxy && !myDebugProcess.disposable.isDisposed()) { // do not add more than once
       threadProxy.addListener(myListener, this);
     }
     myThread = threadProxy;
@@ -377,8 +384,9 @@ public abstract class SuspendContextImpl extends XSuspendContext implements Susp
     return myThread != null ? myThread.toString() : JavaDebuggerBundle.message("string.null.context");
   }
 
-  Attachment toAttachment() {
+  String toAttachmentString() {
     StringBuilder sb = new StringBuilder();
+    sb.append("------------------\ncontext ").append(this).append(":\n");
     sb.append("myDebugId = ").append(myDebugId).append("\n");
     sb.append("myThread = ").append(myThread).append("\n");
     sb.append("Suspend policy = ").append(getSuspendPolicyString()).append("\n");
@@ -410,7 +418,7 @@ public abstract class SuspendContextImpl extends XSuspendContext implements Susp
     sb.append("myVotesToVote = ").append(myVotesToVote).append("\n");
     sb.append("myIsResumed = ").append(myIsResumed).append("\n");
     sb.append("myIsGoingToResume = ").append(myIsGoingToResume).append("\n");
-    return new Attachment("context_ID_" + myDebugId + ".txt", sb.toString());
+    return sb.toString();
   }
 
   private String getSuspendPolicyString() {

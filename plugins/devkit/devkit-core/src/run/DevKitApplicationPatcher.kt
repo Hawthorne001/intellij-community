@@ -6,25 +6,33 @@ import com.intellij.execution.JavaRunConfigurationBase
 import com.intellij.execution.RunConfigurationExtension
 import com.intellij.execution.application.ApplicationConfiguration
 import com.intellij.execution.configurations.*
+import com.intellij.execution.scratch.JavaScratchConfiguration
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.IntelliJProjectUtil
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.util.io.FileUtilRt
-import com.intellij.platform.ijent.community.buildConstants.*
+import com.intellij.platform.ijent.community.buildConstants.IJENT_BOOT_CLASSPATH_MODULE
+import com.intellij.platform.ijent.community.buildConstants.IJENT_REQUIRED_DEFAULT_NIO_FS_PROVIDER_CLASS
+import com.intellij.platform.ijent.community.buildConstants.IJENT_WSL_FILE_SYSTEM_REGISTRY_KEY
+import com.intellij.platform.ijent.community.buildConstants.MULTI_ROUTING_FILE_SYSTEM_VMOPTIONS
 import com.intellij.util.PlatformUtils
 import com.intellij.util.lang.UrlClassLoader
 import com.intellij.util.system.CpuArch
 import org.jetbrains.ide.BuiltInServerManager
 import org.jetbrains.idea.devkit.requestHandlers.CompileHttpRequestHandlerToken
 import org.jetbrains.idea.devkit.requestHandlers.passDataAboutBuiltInServer
+import java.lang.ClassLoader.getSystemClassLoader
+import java.net.URLClassLoader
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import kotlin.io.path.invariantSeparatorsPathString
 
+@Suppress("SpellCheckingInspection")
 internal class DevKitApplicationPatcher : RunConfigurationExtension() {
-  @Suppress("SpellCheckingInspection")
   override fun <T : RunConfigurationBase<*>> updateJavaParameters(
     configuration: T,
     javaParameters: JavaParameters,
@@ -37,11 +45,15 @@ internal class DevKitApplicationPatcher : RunConfigurationExtension() {
     if (configuration !is JavaRunConfigurationBase) {
       return
     }
+    if (configuration is JavaScratchConfiguration) {
+      return
+    }
+
     val mainClass = configuration.runClass ?: return
 
     passDataAboutBuiltInServer(javaParameters, project)
     val vmParameters = javaParameters.vmParametersList
-    val module = configuration.configurationModule.module
+    val module = configuration.configurationModule.module ?: return
     val jdk = JavaParameters.getJdkToRunModule(module, true) ?: return
     if (!vmParameters.getPropertyValue("intellij.devkit.skip.automatic.add.opens").toBoolean()) {
       JUnitDevKitPatcher.appendAddOpensWhenNeeded(project, jdk, vmParameters)
@@ -109,7 +121,10 @@ internal class DevKitApplicationPatcher : RunConfigurationExtension() {
     // Enable the IJent file system only when the new default FS provider class is available.
     // It is required to let actual DevKit plugins work with branches without the FS provider class, like 241.
     if (JUnitDevKitPatcher.loaderValid(project, null, IJENT_REQUIRED_DEFAULT_NIO_FS_PROVIDER_CLASS)) {
-      val isIjentWslFsEnabled = isIjentWslFsEnabledByDefaultForProduct(vmParameters.getPropertyValue("idea.platform.prefix"))
+      val isIjentWslFsEnabled = isIjentWslFsEnabledByDefaultForProduct_Reflective(
+        configuration.workingDirectory,
+        vmParameters.getPropertyValue("idea.platform.prefix"),
+      )
       vmParameters.add("-D${IJENT_WSL_FILE_SYSTEM_REGISTRY_KEY}=$isIjentWslFsEnabled")
       if (isIjentWslFsEnabled) {
         vmParameters.addAll(MULTI_ROUTING_FILE_SYSTEM_VMOPTIONS)
@@ -149,7 +164,7 @@ internal class DevKitApplicationPatcher : RunConfigurationExtension() {
       val files = try {
         Files.readAllLines(runDir.resolve("core-classpath.txt"))
       }
-      catch (ignore: NoSuchFileException) {
+      catch (_: NoSuchFileException) {
         null
       }
 
@@ -199,7 +214,56 @@ private fun getIdeSystemProperties(runDir: Path): Map<String, String> {
     // require bundled JNA dispatcher lib
     "jna.nosys" to "true",
     "jna.noclasspath" to "true",
-    "skiko.library.path" to "$libDir/skiko-awt-runtime-all",
     "compose.swing.render.on.graphics" to "true",
   )
+}
+
+/**
+ * A direct call of [com.intellij.platform.ijent.community.buildConstants.isIjentWslFsEnabledByDefaultForProduct] invokes
+ * the function which is bundled with the DevKit plugin.
+ * In contrast, the result of this function corresponds to what is written in the source code at current revision.
+ */
+@Suppress("FunctionName")
+private fun isIjentWslFsEnabledByDefaultForProduct_Reflective(workingDirectory: String?, platformPrefix: String?): Boolean {
+  if (workingDirectory == null) return false
+  try {
+    val buildConstantsClassPath = Path.of(
+      workingDirectory,
+      "out/classes/production/intellij.platform.ijent.community.buildConstants",
+    ).toUri().toURL()
+
+    val kotlinStdlibClassPath = run {
+      val systemClassLoader = getSystemClassLoader()
+      val kotlinCollectionsClassUri = systemClassLoader.getResource("kotlin/collections/CollectionsKt.class")!!.toURI()
+
+      if (kotlinCollectionsClassUri.scheme != "jar") {
+        logger<DevKitApplicationPatcher>().warn("Kotlin stdlib is not in a JAR: $kotlinCollectionsClassUri")
+        return false
+      }
+      val osPath = kotlinCollectionsClassUri.schemeSpecificPart
+        .substringBefore(".jar!")
+        .plus(".jar")
+        .removePrefix(if (SystemInfo.isWindows) "file:/" else "file:")
+
+      Path.of(osPath).toUri().toURL()
+    }
+
+    val tmpClassLoader = URLClassLoader(arrayOf(buildConstantsClassPath, kotlinStdlibClassPath), null)
+    val constantsClass = tmpClassLoader.loadClass("com.intellij.platform.ijent.community.buildConstants.IjentBuildScriptsConstantsKt")
+    val method = constantsClass.getDeclaredMethod("isIjentWslFsEnabledByDefaultForProduct", String::class.java)
+    return method.invoke(null, platformPrefix) as Boolean
+  }
+  catch (err: Throwable) {
+    when (err) {
+      is ClassNotFoundException, is NoSuchMethodException, is IllegalAccessException, is java.lang.reflect.InvocationTargetException -> {
+        logger<DevKitApplicationPatcher>().warn(
+          "Failed to reflectively load IJentWslFsEnabledByDefaultForProduct from built classes." +
+          " Maybe the file didn't exist in this revision, so the IJent WSL FS was disabled.",
+          err,
+        )
+        return false
+      }
+      else -> throw err
+    }
+  }
 }

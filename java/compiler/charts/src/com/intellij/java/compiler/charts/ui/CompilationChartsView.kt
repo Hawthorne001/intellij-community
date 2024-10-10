@@ -4,6 +4,9 @@ package com.intellij.java.compiler.charts.ui
 import com.intellij.java.compiler.charts.CompilationChartsViewModel
 import com.intellij.java.compiler.charts.CompilationChartsViewModel.CpuMemoryStatisticsType.CPU
 import com.intellij.java.compiler.charts.CompilationChartsViewModel.CpuMemoryStatisticsType.MEMORY
+import com.intellij.openapi.actionSystem.DataKey
+import com.intellij.openapi.actionSystem.DataSink
+import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.project.Project
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
@@ -12,12 +15,16 @@ import com.jetbrains.rd.util.reactive.IViewableList
 import javax.swing.JViewport
 import javax.swing.ScrollPaneConstants
 
-class CompilationChartsView(project: Project, private val vm: CompilationChartsViewModel) : BorderLayoutPanel() {
+class CompilationChartsView(project: Project, private val vm: CompilationChartsViewModel) : BorderLayoutPanel(), UiDataProvider {
+  private val diagrams: CompilationChartsDiagramsComponent
+  private val rightAdhesionScrollBarListener: RightAdhesionScrollBarListener
+
   init {
     val zoom = Zoom()
+    val scrollType = AutoScrollingType()
 
     val scroll = object : JBScrollPane() {
-      override fun createViewport(): JViewport = CompilationChartsViewport(zoom)
+      override fun createViewport(): JViewport = CompilationChartsViewport(scrollType)
     }.apply {
       horizontalScrollBarPolicy = ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS
       verticalScrollBarPolicy = ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED
@@ -25,9 +32,9 @@ class CompilationChartsView(project: Project, private val vm: CompilationChartsV
       viewport.scrollMode = JViewport.SIMPLE_SCROLL_MODE
       name = "compilation-charts-scroll-pane"
     }
-    val rightAdhesionScrollBarListener = RightAdhesionScrollBarListener(scroll.viewport)
+    rightAdhesionScrollBarListener = RightAdhesionScrollBarListener(scroll.viewport, zoom, scrollType)
     scroll.horizontalScrollBar.addAdjustmentListener(rightAdhesionScrollBarListener)
-    val diagrams = CompilationChartsDiagramsComponent(vm, zoom, scroll.viewport).apply {
+    diagrams = CompilationChartsDiagramsComponent(vm, zoom, scroll.viewport).apply {
       addMouseWheelListener(rightAdhesionScrollBarListener)
       name = "compilation-charts-diagrams-component"
       isFocusable = true
@@ -35,7 +42,7 @@ class CompilationChartsView(project: Project, private val vm: CompilationChartsV
 
     scroll.setViewportView(diagrams)
 
-    val panel = ActionPanel(project, vm, diagrams)
+    val panel = ActionPanel(project, vm, scroll.viewport)
     addToTop(panel)
     addToCenter(scroll)
 
@@ -75,12 +82,34 @@ class CompilationChartsView(project: Project, private val vm: CompilationChartsV
       diagrams.cpuMemory = filter
       diagrams.smartDraw(true, false)
     }
+  }
 
-    vm.scrollToEndEvent.advise(vm.lifetime) { _ ->
-      rightAdhesionScrollBarListener.scrollToEnd()
+  override fun uiDataSnapshot(sink: DataSink) {
+    sink[COMPILATION_CHARTS_VIEW_KEY] = this
+  }
+
+  internal fun scrollToEnd() {
+    rightAdhesionScrollBarListener.scrollToEnd()
+  }
+
+  internal fun zoom(zoomType: ZoomEvent) {
+    when (zoomType) {
+      ZoomEvent.IN -> rightAdhesionScrollBarListener.increase()
+      ZoomEvent.OUT -> rightAdhesionScrollBarListener.decrease()
+      ZoomEvent.RESET -> rightAdhesionScrollBarListener.reset()
     }
+    diagrams.smartDraw(true, false)
   }
 }
+
+enum class ZoomEvent {
+  IN,
+  OUT,
+  RESET
+}
+
+
+internal val COMPILATION_CHARTS_VIEW_KEY = DataKey.create<CompilationChartsView>("CompilationChartsView")
 
 data class Statistic(var start: Long, var end: Long, var maxMemory: Long, var maxCpu: Long = 100) {
   constructor() : this(Long.MAX_VALUE, 0, 0, 0)

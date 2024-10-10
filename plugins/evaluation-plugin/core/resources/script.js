@@ -14,6 +14,7 @@ document.addEventListener("click", function (e) {
   }
   const suggestionDiv = e.target.closest(".suggestion")
   const featureValueDiv = e.target.closest(".feature-value")
+  const popupDiv = e.target.closest(".autocomplete-items")
   if (featureValueDiv != null) {
     e.stopPropagation()
     if (e.target.classList.contains("favorite-button")) {
@@ -31,7 +32,7 @@ document.addEventListener("click", function (e) {
   else if (suggestionDiv != null) {
     updateElementFeatures(suggestionDiv)
   }
-  else {
+  else if (popupDiv == null) {
     closeAllLists()
   }
 })
@@ -141,7 +142,10 @@ function updatePopup(sessionDiv) {
   }
   else {
     if (isCodeGeneration) {
-      addDiffView(sessionDiv, popup, lookup, codeElement.innerText);
+      const originalCode  = "aia_original_content" in lookup["additionalInfo"]
+        ? lookup["additionalInfo"]["aia_original_content"]
+        : codeElement.innerText
+      addDiffView(sessionDiv, popup, lookup, originalCode)
     } else {
       addSuggestions(sessionDiv, popup, lookup);
     }
@@ -219,6 +223,9 @@ function addCommonFeatures(sessionDiv, popup, lookup) {
   addRelevanceModelBlock(popup, lookup, "filter")
   addAiaDiagnosticsBlock("Response", "aia_response", popup, lookup)
   addAiaDiagnosticsBlock("Context", "aia_context", popup, lookup)
+  addAiaDiagnosticsBlock("Code snippets from response", "extracted_code_snippets", popup, lookup)
+  addAiaDiagnosticsBlock("Internal api calls from original code snippet", "ground_truth_internal_api_calls", popup, lookup)
+  addAiaDiagnosticsBlock("Extracted api calls from generated code snippet", "predicted_api_calls", popup, lookup)
   addDiagnosticsBlock("RAW SUGGESTIONS", "raw_proposals", popup, lookup)
   addDiagnosticsBlock("RAW FILTERED", "raw_filtered", popup, lookup)
   addDiagnosticsBlock("ANALYZED SUGGESTIONS", "analyzed_proposals", popup, lookup)

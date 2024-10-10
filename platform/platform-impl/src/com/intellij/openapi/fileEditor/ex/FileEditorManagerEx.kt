@@ -4,6 +4,7 @@ package com.intellij.openapi.fileEditor.ex
 import com.intellij.ide.impl.DataValidators
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.*
+import com.intellij.openapi.components.serviceAsync
 import com.intellij.openapi.components.serviceIfCreated
 import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
@@ -18,7 +19,6 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Pair
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.docking.DockContainer
-import com.intellij.util.concurrency.annotations.RequiresBlockingContext
 import com.intellij.util.concurrency.annotations.RequiresEdt
 import kotlinx.coroutines.flow.StateFlow
 import org.jetbrains.annotations.ApiStatus.Experimental
@@ -31,8 +31,9 @@ import javax.swing.JComponent
 abstract class FileEditorManagerEx : FileEditorManager() {
   companion object {
     @JvmStatic
-    @RequiresBlockingContext
     fun getInstanceEx(project: Project): FileEditorManagerEx = getInstance(project) as FileEditorManagerEx
+
+    suspend fun getInstanceExAsync(project: Project): FileEditorManagerEx = project.serviceAsync<FileEditorManager>() as FileEditorManagerEx
 
     fun getInstanceExIfCreated(project: Project): FileEditorManagerEx? {
       return project.serviceIfCreated<FileEditorManager>() as FileEditorManagerEx?
@@ -108,7 +109,6 @@ abstract class FileEditorManagerEx : FileEditorManager() {
 
   abstract fun hasOpenedFile(): Boolean
 
-  @RequiresBlockingContext
   open fun canOpenFile(file: VirtualFile): Boolean {
     return FileEditorProviderManager.getInstance().getProviderList(project, file).isNotEmpty()
   }

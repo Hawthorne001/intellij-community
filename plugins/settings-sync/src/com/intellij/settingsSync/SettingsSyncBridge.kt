@@ -172,7 +172,12 @@ class SettingsSyncBridge(
       }
     }
     catch (e: Throwable) {
-      stopSyncingAndRollback(previousState, e)
+      if (initMode != InitMode.JustInit) {
+        stopSyncingAndRollback(previousState, e)
+      } else {
+        LOG.warn("Cannot sync settings on initialization.", e)
+        SettingsSyncStatusTracker.getInstance().updateOnError(e.localizedMessage ?: e.toString())
+      }
     }
   }
 
@@ -377,7 +382,7 @@ class SettingsSyncBridge(
   }
 
   private fun checkServer() {
-    when (remoteCommunicator.checkServerState()) {
+    when (val result = remoteCommunicator.checkServerState()) {
       is ServerState.UpdateNeeded -> {
         LOG.info("Updating from server")
         updateChecker.scheduleUpdateFromServer()
@@ -389,9 +394,14 @@ class SettingsSyncBridge(
       }
       ServerState.UpToDate -> {
         LOG.debug("Updating settings is not needed")
+        // Clear the error state, if any
+        SettingsSyncStatusTracker.getInstance().updateOnSuccess()
       }
       is ServerState.Error -> {
-        // error already logged in checkServerState
+        // The error is already logged in `SettingsSyncRemoteCommunicator.checkServerState`, but we need to set
+        // an error state for the UI to display failed sync information in the top-right corner settings menu
+        SettingsSyncStatusTracker.getInstance().updateOnError(
+          SettingsSyncBundle.message("notification.title.push.error") + ": " + result.message)
       }
     }
   }

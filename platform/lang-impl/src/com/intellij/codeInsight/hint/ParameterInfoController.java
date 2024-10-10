@@ -13,6 +13,7 @@ import com.intellij.codeWithMe.ClientId;
 import com.intellij.ide.IdeTooltip;
 import com.intellij.injected.editor.EditorWindow;
 import com.intellij.lang.parameterInfo.ParameterInfoHandler;
+import com.intellij.openapi.application.AccessToken;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.application.WriteIntentReadAction;
@@ -35,6 +36,7 @@ import com.intellij.ui.ExperimentalUI;
 import com.intellij.ui.HintHint;
 import com.intellij.ui.LightweightHint;
 import com.intellij.ui.ScreenUtil;
+import com.intellij.util.SlowOperations;
 import com.intellij.util.indexing.DumbModeAccessType;
 import com.intellij.util.text.CharArrayUtil;
 import com.intellij.util.ui.JBUI;
@@ -42,6 +44,8 @@ import com.intellij.util.ui.update.MergingUpdateQueue;
 import com.intellij.util.ui.update.Update;
 import org.jetbrains.annotations.NotNull;
 
+import javax.accessibility.Accessible;
+import javax.accessibility.AccessibleContext;
 import javax.swing.*;
 import java.awt.*;
 import java.util.List;
@@ -292,9 +296,16 @@ public final class ParameterInfoController extends ParameterInfoControllerBase {
             })
               .withDocumentsCommitted(myProject)
               .expireWhen(
-                () -> !myKeepOnHintHidden && !myHint.isVisible() && myLateShowHintCallback == null && !ApplicationManager.getApplication().isHeadlessEnvironment() ||
-                      getCurrentOffset() != context.getOffset() ||
-                      !elementForUpdating.isValid())
+                () -> {
+                  try (AccessToken ignore = SlowOperations.knownIssue("IJPL-162829")) {
+                    return !myKeepOnHintHidden &&
+                           !myHint.isVisible() &&
+                           myLateShowHintCallback == null &&
+                           !ApplicationManager.getApplication().isHeadlessEnvironment() ||
+                           getCurrentOffset() != context.getOffset() ||
+                           !elementForUpdating.isValid();
+                  }
+                })
               .expireWith(this),
             element -> {
               if (element != null && continuation != null) {
@@ -585,6 +596,24 @@ public final class ParameterInfoController extends ParameterInfoControllerBase {
     @Override
     public String toString() {
       return getComponentCount() == 0 ? "<empty>" : getComponent(0).toString();
+    }
+
+    @Override
+    public AccessibleContext getAccessibleContext() {
+      if (accessibleContext == null) {
+        accessibleContext = new AccessibleJPanel() {
+          @Override
+          public Accessible getAccessibleParent() {
+            Container parent = getParent();
+            if (parent instanceof Accessible accessible) {
+              return accessible;
+            }
+            return super.getAccessibleParent();
+          }
+        };
+      }
+
+      return accessibleContext;
     }
   }
 }

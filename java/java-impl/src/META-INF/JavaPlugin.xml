@@ -1,43 +1,27 @@
-<!--
-  ~ Copyright 2000-2017 JetBrains s.r.o.
-  ~
-  ~ Licensed under the Apache License, Version 2.0 (the "License");
-  ~ you may not use this file except in compliance with the License.
-  ~ You may obtain a copy of the License at
-  ~
-  ~ http://www.apache.org/licenses/LICENSE-2.0
-  ~
-  ~ Unless required by applicable law or agreed to in writing, software
-  ~ distributed under the License is distributed on an "AS IS" BASIS,
-  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  ~ See the License for the specific language governing permissions and
-  ~ limitations under the License.
-  -->
 <idea-plugin xmlns:xi="http://www.w3.org/2001/XInclude">
   <module value="com.intellij.modules.java"/>
 
   <depends optional="true" config-file="images-integration.xml">com.intellij.platform.images</depends>
   <depends optional="true" config-file="community-integration.xml">com.intellij.modules.idea.community</depends>
 
-  <xi:include href="/idea/JavaActions.xml" xpointer="xpointer(/idea-plugin/*)"/>
+  <xi:include href="/idea/JavaActions.xml"/>
 
-  <xi:include href="intellij.java.frontback.psi.impl.xml" xpointer="xpointer(/idea-plugin/*)"/>
-  <xi:include href="intellij.java.frontback.impl.xml" xpointer="xpointer(/idea-plugin/*)"/>
-  <xi:include href="/META-INF/JvmAnalysisPlugin.xml" xpointer="xpointer(/idea-plugin/*)"/>
-  <xi:include href="/META-INF/JavaIndexingPlugin.xml" xpointer="xpointer(/idea-plugin/*)"/>
-  <xi:include href="/META-INF/JavaPsiPlugin.xml" xpointer="xpointer(/idea-plugin/*)"/>
-  <xi:include href="/META-INF/JavaAnalysisPlugin.xml" xpointer="xpointer(/idea-plugin/*)"/>
-  <xi:include href="/META-INF/IntentionPowerPack.xml" xpointer="xpointer(/idea-plugin/*)">
+  <xi:include href="intellij.java.frontback.psi.impl.xml"/>
+  <xi:include href="intellij.java.frontback.impl.xml"/>
+  <xi:include href="/META-INF/JavaIndexingPlugin.xml"/>
+  <xi:include href="/META-INF/JavaPsiPlugin.xml"/>
+  <xi:include href="/META-INF/JavaAnalysisPlugin.xml"/>
+  <xi:include href="/META-INF/IntentionPowerPack.xml">
     <xi:fallback/>
   </xi:include>
-  <xi:include href="/META-INF/InspectionGadgets.xml" xpointer="xpointer(/idea-plugin/*)"/>
-  <xi:include href="/META-INF/ManifestSupport.xml" xpointer="xpointer(/idea-plugin/*)">
+  <xi:include href="/META-INF/InspectionGadgets.xml"/>
+  <xi:include href="/META-INF/ManifestSupport.xml">
     <xi:fallback/>
   </xi:include>
-  <xi:include href="/META-INF/TypeMigration.xml" xpointer="xpointer(/idea-plugin/*)">
+  <xi:include href="/META-INF/TypeMigration.xml">
     <xi:fallback/>
   </xi:include>
-  <xi:include href="/META-INF/UsageData.xml" xpointer="xpointer(/idea-plugin/*)">
+  <xi:include href="/META-INF/UsageData.xml">
     <xi:fallback/>
   </xi:include>
 
@@ -344,6 +328,7 @@
                     dynamic="true">
       <with attribute="implementationClass" implements="com.intellij.debugger.engine.dfaassist.DfaAssistProvider"/>
     </extensionPoint>
+    <extensionPoint qualifiedName="com.intellij.debugger.extraDebugNodesProvider" interface="com.intellij.debugger.ui.tree.ExtraDebugNodesProvider" dynamic="true"/>
 
     <!--<extensionPoint qualifiedName="com.intellij.expectedTypesProvider" interface="com.intellij.codeInsight.ExpectedTypesProviderExtension"/>-->
 
@@ -637,7 +622,7 @@
     <daemon.highlightInfoFilter implementation="com.intellij.debugger.engine.evaluation.DebuggerHighlightFilter"/>
 
     <!-- Compiler -->
-    <projectConfigurable groupId="build" groupWeight="130" instance="com.intellij.compiler.options.CompilerConfigurable"
+    <projectConfigurable groupId="build" instance="com.intellij.compiler.options.CompilerConfigurable"
                          id="project.propCompiler" order="after project"
                          key="compiler.configurable.display.name" bundle="messages.JavaCompilerBundle">
       <configurable instance="com.intellij.openapi.compiler.options.ExcludedEntriesConfigurable"
@@ -964,6 +949,7 @@
     <jdkUpdateCheckContributor implementation="com.intellij.execution.AlternativeSdkRootsProviderForJdkUpdate"/>
     <debugger.asyncStackTraceProvider
       implementation="com.intellij.debugger.ui.breakpoints.StackCapturingLineBreakpoint$CaptureAsyncStackTraceProvider"/>
+    <xdebugger.controlExceptionBreakpointSupport implementation="com.intellij.debugger.codeinsight.ControlExceptionBreakpointJVMSupport"/>
 
     <debugger.compoundRendererProvider implementation="com.intellij.debugger.ui.tree.render.UnboxableTypeRenderer$BooleanRenderer"/>
     <debugger.compoundRendererProvider implementation="com.intellij.debugger.ui.tree.render.UnboxableTypeRenderer$ByteRenderer"/>
@@ -1025,7 +1011,7 @@
     <library.type implementation="com.intellij.externalSystem.ImportedLibraryType"/>
     <postStartupActivity implementation="com.intellij.codeInsight.daemon.impl.IdeaLibDependencyNotifier"/>
     <postStartupActivity implementation="com.intellij.jarRepository.RepositoryLibrarySynchronizer"/>
-    <projectConfigurable groupId="build" groupWeight="120" instance="com.intellij.jarRepository.settings.RemoteRepositoriesConfigurable"
+    <projectConfigurable groupId="build" instance="com.intellij.jarRepository.settings.RemoteRepositoriesConfigurable"
                          key="configurable.RemoteRepositoriesConfigurable.display.name" bundle="messages.JavaUiBundle"
                          order="last"/>
 
@@ -1095,7 +1081,7 @@
     <refactoring.pushDown language="JAVA" implementationClass="com.intellij.refactoring.memberPushDown.JavaPushDownDelegate" id="java"/>
     <refactoring.introduceParameterObject language="JAVA"
                                           implementationClass="com.intellij.refactoring.introduceparameterobject.JavaIntroduceParameterObjectDelegate"/>
-    <refactoring.invertBoolean implementation="com.intellij.refactoring.invertBoolean.JavaInvertBooleanDelegate"/>
+    <refactoring.invertBoolean language="JAVA" implementationClass="com.intellij.refactoring.invertBoolean.JavaInvertBooleanDelegate"/>
     <refactoring.moveInnerClassUsagesHandler language="JAVA"
                                              implementationClass="com.intellij.refactoring.move.moveInner.MoveInnerClassJavaUsagesHandler"
                                              id="java"/>
@@ -1172,7 +1158,7 @@
     <testFinder implementation="com.intellij.testIntegration.JavaTestFinder"/>
     <filePasteProvider implementation="com.intellij.ide.JavaFilePasteProvider" order="before fileList"/>
     <enterHandlerDelegate implementation="com.intellij.javadoc.EnterInJavadocParamDescriptionHandler"/>
-    <enterHandlerDelegate implementation="com.intellij.javadoc.JavadocSnippetEnterHandler" order="before EnterBetweenBracesHandler"/>
+    <enterHandlerDelegate implementation="com.intellij.javadoc.JavadocSnippetEnterHandler" order="before EnterBetweenBracesHandler, before EnterInPropertiesFileHandler"/>
     <enterHandlerDelegate implementation="com.intellij.javadoc.JavaDocMarkdownEnterHandler" order="after EnterInLineCommentHandler" />
     <editorNavigation implementation="com.intellij.javadoc.JavadocNavigationDelegate"/>
     <methodNavigationOffsetProvider implementation="com.intellij.codeInsight.navigation.JavaMethodNavigationOffsetProvider"/>
@@ -1307,7 +1293,6 @@
     <highlightUsagesHandlerFactory implementation="com.intellij.codeInsight.highlighting.HighlightExitPointsHandlerFactory"/>
     <highlightUsagesHandlerFactory implementation="com.intellij.codeInsight.daemon.impl.HighlightSuppressedWarningsFactory"/>
     <highlightUsagesHandlerFactory implementation="com.intellij.codeInsight.highlighting.HighlightExceptionsHandlerFactory"/>
-    <highlightUsagesHandlerFactory implementation="com.intellij.codeInsight.highlighting.HighlightRecordComponentsRecordFactory"/>
     <workspaceModel.moduleExtensionBridgeFactory
       implementation="com.intellij.workspaceModel.ide.legacyBridge.impl.java.CompilerModuleExtensionBridge$Factory"/>
     <projectExtension implementation="com.intellij.openapi.roots.impl.LanguageLevelProjectExtensionImpl$MyProjectExtension"/>
@@ -1573,7 +1558,7 @@
     <inspectionElementsMerger implementation="com.intellij.codeInspection.ExplicitArrayFillingInspectionMerger"/>
     <externalProjectDataService implementation="com.intellij.externalSystem.JavaProjectDataService"/>
     <externalProjectDataService implementation="com.intellij.externalSystem.JavaModuleDataService"/>
-    <externalWorkspaceDataService implementation="com.intellij.externalSystem.JarTaskManifestDataService"/>
+    <externalWorkspaceDataService implementation="com.intellij.externalSystem.JavaManifestDataService"/>
     <libraryDataServiceExtension implementation="com.intellij.externalSystem.JavaLibraryDataServiceExtension"/>
     <postStartupActivity implementation="com.intellij.pom.java.AcceptedLanguageLevelsSettingsStartupActivity"/>
     <projectModelModifier implementation="com.intellij.openapi.roots.impl.IdeaProjectModelModifier" order="last"/>
@@ -1672,6 +1657,10 @@
     <java.error.fix errorCode="guarded.pattern.variable.must.be.final"
                     implementationClass="com.intellij.codeInsight.daemon.impl.quickfix.VariableAccessFromInnerClassJava10Fix"/>
     <stripTrailingSpacesFilterFactory implementation="com.intellij.codeEditor.JavaStripTrailingSpacesFilterFactory"/>
+
+    <advancedSetting id="java.show.irrelevant.templates.in.source.roots" default="false"
+                     groupKey="advanced.settings.group.java" bundle="messages.JavaBundle"/>
+    <newFileActionCategoryHandler implementation="com.intellij.ide.actions.JavaNewFileCategoryHandler"/>
 
     <inspection.basicVisitor class="com.intellij.psi.JavaElementVisitor"/>
 
@@ -2898,6 +2887,8 @@
   </extensions>
 
   <applicationListeners>
+    <listener class="com.intellij.debugger.engine.CancelingSteppingListener"
+              topic="com.intellij.debugger.engine.SteppingListener"/>
     <listener class="com.intellij.codeInsight.daemon.problems.pass.ProjectProblemFileFileEditorManagerListener"
               topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
     <listener class="com.intellij.psi.impl.cache.impl.idCache.JavaIdIndexRegistryValueListener"

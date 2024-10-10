@@ -380,12 +380,20 @@ fun <T : CommandChain> T.pressKey(key: Keys): T = apply {
   addCommand("${CMD_PREFIX}pressKey", key.name)
 }
 
-fun <T : CommandChain> T.pressKey(vararg key: Keys): T = apply {
-  key.forEach { addCommand("${CMD_PREFIX}pressKey", it.name) }
+fun <T : CommandChain> T.pressKey(vararg keys: Keys): T = apply {
+  keys.forEach { addCommand("${CMD_PREFIX}pressKey", it.name) }
 }
 
 fun <T : CommandChain> T.pressKey(key: Keys, times: Int): T = apply {
   repeat((1..times).count()) { addCommand("${CMD_PREFIX}pressKey", key.name) }
+}
+
+fun <T : CommandChain> T.pressKeyWithDelay(key: Keys, times: Int, timeUnit: TimeUnit, sleepDelay: () -> Long): T = apply {
+  repeat((1..times).count()) {
+    sleep(sleepDelay(), timeUnit)
+    addCommand("${CMD_PREFIX}pressKey", key.name)
+  }
+  sleep(sleepDelay(), timeUnit)
 }
 
 /**
@@ -715,6 +723,10 @@ fun <T : CommandChain> T.setupInlineCompletionListener(): T = apply {
   addCommand("${CMD_PREFIX}setupInlineCompletionListener")
 }
 
+fun <T : CommandChain> T.callInlineCompletionCommand(): T = apply {
+  addCommand("${CMD_PREFIX}callInlineCompletionCommand")
+}
+
 fun <T : CommandChain> T.validateMavenGoal(settings: MavenGoalConfigurationDto): T = apply {
   val options = objectMapper.writeValueAsString(settings)
   addCommand("${CMD_PREFIX}validateMavenGoal $options")
@@ -814,6 +826,11 @@ fun <T : CommandChain> T.executeEditorAction(action: String): T = apply {
 fun <T : CommandChain> T.moveFiles(moveFileData: MoveFilesData): T = apply {
   val jsonData = objectMapper.writeValueAsString(moveFileData)
   addCommand("${CMD_PREFIX}moveFiles $jsonData")
+}
+
+fun <T : CommandChain> T.moveDeclarations(moveDeclarationData: MoveDeclarationsData): T = apply {
+  val jsonData = objectMapper.writeValueAsString(moveDeclarationData)
+  addCommand("${CMD_PREFIX}moveDeclarations $jsonData")
 }
 
 fun <T : CommandChain> T.performGC(): T = apply {

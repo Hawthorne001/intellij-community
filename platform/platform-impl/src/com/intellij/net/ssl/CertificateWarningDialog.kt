@@ -15,6 +15,7 @@ import com.intellij.ui.*
 import com.intellij.ui.CheckboxTree.CheckboxTreeCellRenderer
 import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.labels.LinkLabel
 import com.intellij.ui.dsl.builder.*
 import com.intellij.ui.dsl.gridLayout.UnscaledGaps
@@ -26,6 +27,7 @@ import com.intellij.util.net.ssl.CertificateWrapper.CommonField
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.tree.TreeUtil
+import fleet.util.logging.logger
 import org.jetbrains.annotations.Nls
 import java.awt.Color
 import java.awt.Component
@@ -34,6 +36,7 @@ import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
 import java.text.DateFormat
 import javax.net.ssl.X509ExtendedTrustManager
+import javax.swing.BorderFactory
 import javax.swing.JComponent
 import javax.swing.JTextPane
 import javax.swing.JTree
@@ -52,6 +55,7 @@ internal class CertificateWarningDialog(
   private val authType: String,
   private val selectedCerts: MutableSet<X509Certificate>,
 ) : DialogWrapper(false) {
+  private var expandedByButton = false
   private var currentCertificate = CertificateWrapper(certificates.first())
   private val certificateErrorsMap = getCertificateErrorsMap()
 
@@ -78,20 +82,22 @@ internal class CertificateWarningDialog(
   }
 
   override fun createCenterPanel(): JComponent? {
-    return panel {
+    val panel = panel {
       row {
         var error: String? = null
-        certificates.forEach {
-          val errors = certificateErrorsMap[it]!!
-          when {
-            errors.contains(CertificateError.UNTRUSTED_AUTHORITY) -> IdeBundle.message("label.certificate.signed.by.untrusted.authority")
-            errors.contains(CertificateError.SELF_SIGNED) -> IdeBundle.message("label.certificate.self.signed")
-            errors.contains(CertificateError.NOT_YET_VALID) -> IdeBundle.message("label.certificate.not.yet.valid")
-            errors.contains(CertificateError.EXPIRED) -> IdeBundle.message("label.certificate.expired")
-            else -> null
-          }?.let {
-            error = it
-            return@forEach
+        run breaking@{
+          certificates.forEach {
+            val errors = certificateErrorsMap[it]!!
+            when {
+              errors.contains(CertificateError.SELF_SIGNED) -> IdeBundle.message("label.certificate.self.signed")
+              errors.contains(CertificateError.NOT_YET_VALID) -> IdeBundle.message("label.certificate.not.yet.valid")
+              errors.contains(CertificateError.EXPIRED) -> IdeBundle.message("label.certificate.expired")
+              errors.contains(CertificateError.UNTRUSTED_AUTHORITY) -> IdeBundle.message("label.certificate.signed.by.untrusted.authority")
+              else -> null
+            }?.let {
+              error = it
+              return@breaking
+            }
           }
         }
         icon(AllIcons.General.WarningDialog)
@@ -114,30 +120,47 @@ internal class CertificateWarningDialog(
         }
       }.apply {
         addExpandedListener {
+          if (it) {
+            CertificateWarningStatisticsCollector.detailsShown(expandedByButton)
+            expandedByButton = false
+          }
           if (it && !isDetailsShown) {
             setOKButtonText(IdeBundle.message("trust.certificate"))
             isDetailsShown = true
+            isOKActionEnabled = selectedCerts.isNotEmpty()
             updateDetails()
           }
+          pack()
         }
       }
     }.withMinimumWidth(JBUIScale.scale(400))
       .withPreferredWidth(JBUIScale.scale(600))
+
+    return JBScrollPane(panel, JBScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER).apply {
+      border = JBUI.Borders.empty()
+    }
   }
 
   override fun doOKAction() {
     if (!isDetailsShown) {
+      expandedByButton = true
       detailsCollapsibleRow.expanded = true
     }
     else {
       super.doOKAction()
+      CertificateWarningStatisticsCollector.certificateAccepted(selectedCerts.count())
     }
+  }
+
+  override fun doCancelAction() {
+    super.doCancelAction()
+    CertificateWarningStatisticsCollector.certificateRejected()
   }
 
   private fun createCertificateTree(): JTree {
     val untrusted = certificateErrorsMap.entries.filter { it.value.contains(CertificateError.UNTRUSTED_AUTHORITY) }
     val certificatesTree =
-      if (untrusted.isNotEmpty() && untrusted.any { it.key != certificates.first() }) {
+      if ((untrusted.isNotEmpty() && certificates.size > 1) || certificateErrorsMap.filter { entry -> entry.value.isNotEmpty() }.size > 1) {
         val root = CheckedTreeNode("root").apply { isChecked = false }
         var lastNode = root
         certificates.reversed().forEach {
@@ -164,6 +187,9 @@ internal class CertificateWarningDialog(
             val userObject = node?.userObject as? X509Certificate ?: return
             if (node.isChecked) selectedCerts.add(userObject)
             else selectedCerts.remove(userObject)
+            if (isDetailsShown) {
+              isOKActionEnabled = selectedCerts.isNotEmpty()
+            }
           }
         }
         checkboxTree
@@ -196,7 +222,10 @@ internal class CertificateWarningDialog(
     certificatesTree.selectionModel.selectionMode = TreeSelectionModel.SINGLE_TREE_SELECTION
     certificatesTree.isRootVisible = false
 
-    certificatesTree.border = RoundedLineBorder(JBColor.border(), 10)
+    certificatesTree.border = BorderFactory.createCompoundBorder(
+      RoundedLineBorder(JBColor.border(), 10),
+      JBUI.Borders.empty(3)
+    )
     certificatesTree.addTreeSelectionListener(object : TreeSelectionListener {
       override fun valueChanged(e: TreeSelectionEvent?) {
         val lastPathComponent = e?.path?.lastPathComponent as? DefaultMutableTreeNode
@@ -211,19 +240,18 @@ internal class CertificateWarningDialog(
   private fun getTreeCellTextAndColor(value: Any?): Pair<String, Color> {
     val labelForeground = JBUI.CurrentTheme.Label.foreground()
     val userObject = (value as? DefaultMutableTreeNode)?.userObject as? X509Certificate ?: return Pair("", labelForeground)
-    val myWrapper = CertificateWrapper(userObject)
+    val certErrors = certificateErrorsMap[userObject]!!
     val errors = mutableListOf<String>()
-    if (myWrapper.isNotYetValid) {
+    if (certErrors.contains(CertificateError.NOT_YET_VALID)) {
       errors.add(IdeBundle.message("label.certificate.not.yet.valid"))
     }
-    else if (myWrapper.isExpired) {
+    else if (certErrors.contains(CertificateError.EXPIRED)) {
       errors.add(IdeBundle.message("label.certificate.expired"))
     }
 
-    if (myWrapper.isSelfSigned) {
+    if (certErrors.contains(CertificateError.SELF_SIGNED)) {
       errors.add(IdeBundle.message("label.certificate.self.signed"))
-    }
-    if (certificateErrorsMap[userObject]!!.contains(CertificateError.UNTRUSTED_AUTHORITY)) {
+    } else if (certErrors.contains(CertificateError.UNTRUSTED_AUTHORITY)) {
       val error = if (userObject != certificates.first()) IdeBundle.message("label.certificate.untrusted.authority")
       else IdeBundle.message("label.certificate.signed.by.untrusted.authority")
       errors.add(error)
@@ -375,18 +403,34 @@ internal class CertificateWarningDialog(
 
   private fun getCertificateErrorsMap(): Map<X509Certificate, List<CertificateError>> {
     val result = certificates.associateWith { mutableListOf<CertificateError>() }.toMutableMap()
-    certificates.reversed().forEach { cert ->
+    val errorMessage = "unable to find valid certification path"
+    val isPureUntrustedServer = try {
+      manager.checkServerTrusted(certificates.toTypedArray(), authType)
+      false
+    }
+    catch (e: CertificateException) {
+      val hasPathError = e.message?.contains(errorMessage) == true
+      if (!hasPathError) logger<CertificateWarningDialog>().info("Certificate validation message: ${e.message}")
+      hasPathError
+    }
+    val reversedCertList = certificates.reversed()
+    for (i in reversedCertList.indices) {
+      val cert = reversedCertList[i]
       val model = CertificateWrapper(cert)
       val errors = result[cert]!!
-      if (model.isSelfSigned) errors.add(CertificateError.SELF_SIGNED)
-      if (model.isNotYetValid) errors.add(CertificateError.NOT_YET_VALID)
-      if (model.isExpired) errors.add(CertificateError.EXPIRED)
+      if (i == reversedCertList.size - 1 && result.values.flatten().isNotEmpty()) errors.add(CertificateError.UNTRUSTED_AUTHORITY)
       try {
         manager.checkServerTrusted(arrayOf(cert), authType)
       }
       catch (_: CertificateException) {
-        errors.add(CertificateError.UNTRUSTED_AUTHORITY)
-        return@forEach
+        if (isPureUntrustedServer && !model.isSelfSigned && !result.values.flatten().contains(CertificateError.UNTRUSTED_AUTHORITY)) {
+          errors.add(CertificateError.UNTRUSTED_AUTHORITY)
+        }
+        else {
+          if (model.isSelfSigned) errors.add(CertificateError.SELF_SIGNED)
+          if (model.isNotYetValid) errors.add(CertificateError.NOT_YET_VALID)
+          if (model.isExpired) errors.add(CertificateError.EXPIRED)
+        }
       }
     }
     return result

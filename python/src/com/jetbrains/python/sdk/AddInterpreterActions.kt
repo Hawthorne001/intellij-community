@@ -12,22 +12,19 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.project.DumbAware
-import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.projectRoots.Sdk
-import com.intellij.openapi.util.registry.Registry
 import com.jetbrains.python.PyBundle
 import com.jetbrains.python.configuration.PyConfigurableInterpreterList
 import com.jetbrains.python.run.PythonInterpreterTargetEnvironmentFactory
 import com.jetbrains.python.run.allowCreationTargetOfThisType
 import com.jetbrains.python.sdk.ModuleOrProject.ModuleAndProject
 import com.jetbrains.python.sdk.ModuleOrProject.ProjectOnly
-import com.jetbrains.python.sdk.add.PyAddSdkDialog
 import com.jetbrains.python.sdk.add.collector.PythonNewInterpreterAddedCollector
-import com.jetbrains.python.sdk.add.target.PyAddTargetBasedSdkDialog
 import com.jetbrains.python.sdk.add.v2.PythonAddLocalInterpreterDialog
 import com.jetbrains.python.sdk.add.v2.PythonAddLocalInterpreterPresenter
 import com.jetbrains.python.target.PythonLanguageRuntimeType
+import com.jetbrains.python.util.ShowingMessageErrorSync
 import java.util.function.Consumer
 
 fun collectAddInterpreterActions(moduleOrProject: ModuleOrProject, onSdkCreated: Consumer<Sdk>): List<AnAction> {
@@ -62,35 +59,12 @@ private class AddLocalInterpreterAction(
   private val onSdkCreated: Consumer<Sdk>,
 ) : AnAction(PyBundle.messagePointer("python.sdk.action.add.local.interpreter.text"), AllIcons.Nodes.HomeFolder), DumbAware {
   override fun actionPerformed(e: AnActionEvent) {
-    if (Registry.`is`("python.unified.interpreter.configuration")) {
-      val dialogPresenter = PythonAddLocalInterpreterPresenter(moduleOrProject).apply {
-        // Model provides flow, but we need to call Consumer
-        sdkCreatedFlow.oneShotConsumer(onSdkCreated)
-      }
-      PythonAddLocalInterpreterDialog(dialogPresenter).show()
-      return
+    val dialogPresenter = PythonAddLocalInterpreterPresenter(moduleOrProject, errorSink = ShowingMessageErrorSync).apply {
+      // Model provides flow, but we need to call Consumer
+      sdkCreatedFlow.oneShotConsumer(onSdkCreated)
     }
-
-    val module = when (moduleOrProject) {
-      is ModuleAndProject -> moduleOrProject.module
-      is ProjectOnly -> null
-    }
-    val model = PyConfigurableInterpreterList.getInstance(moduleOrProject.project).model
-    PyAddTargetBasedSdkDialog.show(
-      moduleOrProject.project,
-      module,
-      model.sdks.asList(),
-      Consumer { sdk ->
-        if (sdk != null) {
-          PythonNewInterpreterAddedCollector.logPythonNewInterpreterAdded(sdk)
-          if (model.findSdk(sdk.name) == null) {
-            model.addSdk(sdk)
-            model.apply()
-            onSdkCreated.accept(sdk)
-          }
-        }
-      }
-    )
+    PythonAddLocalInterpreterDialog(dialogPresenter).show()
+    return
   }
 }
 
@@ -114,27 +88,6 @@ private class AddInterpreterOnTargetAction(
         }
       }
     }
-  }
-}
-
-class AddInterpreterAction(val project: Project, val module: Module, private val currentSdk: Sdk?)
-  : DumbAwareAction(PyBundle.messagePointer("python.sdk.popup.add.interpreter")) {
-
-  override fun actionPerformed(e: AnActionEvent) {
-    val model = PyConfigurableInterpreterList.getInstance(project).model
-
-    PyAddSdkDialog.show(
-      project,
-      module,
-      model.sdks.asList(),
-      Consumer {
-        if (it != null && model.findSdk(it.name) == null) {
-          model.addSdk(it)
-          model.apply()
-          switchToSdk(module, it, currentSdk)
-        }
-      }
-    )
   }
 }
 

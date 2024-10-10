@@ -49,6 +49,7 @@ import com.intellij.openapi.editor.impl.event.MarkupModelListener;
 import com.intellij.openapi.editor.markup.MarkupModel;
 import com.intellij.openapi.editor.textarea.EmptyInlayModel;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.fileEditor.impl.text.TextEditorProvider;
 import com.intellij.openapi.progress.EmptyProgressIndicator;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -73,12 +74,12 @@ import com.intellij.util.ui.UIUtil;
 import com.intellij.util.ui.update.MergingUpdateQueue;
 import com.intellij.util.ui.update.Update;
 import com.intellij.xml.breadcrumbs.NavigatableCrumb;
-import org.jetbrains.annotations.Nls;
-import org.jetbrains.annotations.NonNls;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.*;
 
 import javax.swing.*;
+import java.awt.*;
+import java.awt.geom.Point2D;
+import java.util.List;
 import java.util.*;
 import java.util.function.IntPredicate;
 import java.util.function.IntUnaryOperator;
@@ -101,6 +102,7 @@ public class UnifiedDiffViewer extends ListenerDiffViewerBase implements EditorD
 
   @NotNull protected Side myMasterSide = Side.RIGHT;
 
+  @ApiStatus.Internal
   @NotNull protected final UnifiedDiffModel myModel = new UnifiedDiffModel(this);
 
   private final boolean[] myForceReadOnlyFlags;
@@ -268,6 +270,7 @@ public class UnifiedDiffViewer extends ListenerDiffViewerBase implements EditorD
     new TextDiffViewerUtil.EditorActionsPopup(createEditorPopupActions()).install(getEditors(), myPanel);
   }
 
+  @ApiStatus.Internal
   @NotNull
   protected UnifiedDiffChangeUi createUi(@NotNull UnifiedDiffChange change) {
     return new UnifiedDiffChangeUi(this, change);
@@ -1107,6 +1110,9 @@ public class UnifiedDiffViewer extends ListenerDiffViewerBase implements EditorD
       sink.set(DiffDataKeys.CURRENT_CHANGE_RANGE, new LineRange(change.getLine1(), change.getLine2()));
     }
     sink.set(DiffDataKeys.EDITOR_CHANGED_RANGE_PROVIDER, new MyChangedRangeProvider());
+
+    sink.set(PlatformCoreDataKeys.FILE_EDITOR,
+             TextEditorProvider.getInstance().getTextEditor(myEditor));
   }
 
   @Override
@@ -1613,6 +1619,7 @@ public class UnifiedDiffViewer extends ListenerDiffViewerBase implements EditorD
   }
 
   private class UnifiedImaginaryEditor extends ImaginaryEditor {
+    private static final Set<String> ourReportedMockMethods = ContainerUtil.newConcurrentSet();
     private static boolean ourDisableImaginaryEditor = false;
 
     private final Side mySide;
@@ -1627,6 +1634,19 @@ public class UnifiedDiffViewer extends ListenerDiffViewerBase implements EditorD
       //noinspection AssignmentToStaticFieldFromInstanceMethod
       ourDisableImaginaryEditor = true;
       return new UnsupportedOperationException("Not implemented. UnifiedDiffViewer.UnifiedImaginaryEditor will be disabled.");
+    }
+
+    protected void warnMockImplementation(@NotNull String methodName) {
+      if (ourReportedMockMethods.add(methodName)) {
+        String message = "Method is not applicable. Consider using 'editor instanceOf ImaginaryEditor'";
+        if (ApplicationManager.getApplication().isInternal() ||
+            ApplicationManager.getApplication().isUnitTestMode()) {
+          LOG.error(message);
+        }
+        else {
+          LOG.warn(message);
+        }
+      }
     }
 
     @Override
@@ -1704,6 +1724,75 @@ public class UnifiedDiffViewer extends ListenerDiffViewerBase implements EditorD
     @Override
     public @NotNull FoldingModel getFoldingModel() {
       return new EmptyFoldingModel();
+    }
+
+    @Override
+    public boolean hasHeaderComponent() {
+      return false;
+    }
+
+    @Override
+    public @Nullable JComponent getHeaderComponent() {
+      return null;
+    }
+
+    @Override
+    public void setHeaderComponent(@Nullable JComponent header) {
+      warnMockImplementation("setHeaderComponent");
+    }
+
+    @Override
+    public int getLineHeight() {
+      warnMockImplementation("getLineHeight");
+      return myEditor.getLineHeight();
+    }
+
+    @Override
+    public @NotNull LogicalPosition visualToLogicalPosition(@NotNull VisualPosition visiblePos) {
+      warnMockImplementation("visualToLogicalPosition");
+      return new LogicalPosition(0, 0);
+    }
+
+    @Override
+    public @NotNull LogicalPosition xyToLogicalPosition(@NotNull Point p) {
+      warnMockImplementation("xyToLogicalPosition");
+      return new LogicalPosition(0, 0);
+    }
+
+    @Override
+    public @NotNull VisualPosition logicalToVisualPosition(@NotNull LogicalPosition logicalPos) {
+      warnMockImplementation("logicalToVisualPosition");
+      return new VisualPosition(0, 0);
+    }
+
+    @Override
+    public @NotNull VisualPosition xyToVisualPosition(@NotNull Point p) {
+      warnMockImplementation("xyToVisualPosition");
+      return new VisualPosition(0, 0);
+    }
+
+    @Override
+    public @NotNull VisualPosition xyToVisualPosition(@NotNull Point2D p) {
+      warnMockImplementation("xyToVisualPosition");
+      return new VisualPosition(0, 0);
+    }
+
+    @Override
+    public @NotNull Point logicalPositionToXY(@NotNull LogicalPosition pos) {
+      warnMockImplementation("logicalPositionToXY");
+      return new Point(0, 0);
+    }
+
+    @Override
+    public @NotNull Point visualPositionToXY(@NotNull VisualPosition visible) {
+      warnMockImplementation("visualPositionToXY");
+      return new Point(0, 0);
+    }
+
+    @Override
+    public @NotNull Point2D visualPositionToPoint2D(@NotNull VisualPosition pos) {
+      warnMockImplementation("visualPositionToPoint2D");
+      return new Point(0, 0);
     }
   }
 }

@@ -19,6 +19,11 @@
             dynamic="true"/>
 
     <extensionPoint
+            qualifiedName="org.jetbrains.kotlin.scriptDiagnosticFixProvider"
+            interface="org.jetbrains.kotlin.idea.script.ScriptDiagnosticFixProvider"
+            dynamic="true"/>
+
+    <extensionPoint
             qualifiedName="org.jetbrains.kotlin.scripting.definitions.scriptDefinitionProvider"
             interface="org.jetbrains.kotlin.scripting.definitions.ScriptDefinitionProvider"
             area="IDEA_PROJECT"/>
@@ -49,17 +54,6 @@
             qualifiedName="org.jetbrains.kotlin.scripting.idea.listener"
             interface="org.jetbrains.kotlin.idea.core.script.configuration.listener.ScriptChangeListener"
             area="IDEA_PROJECT" dynamic="true"/>
-
-    <extensionPoint
-            qualifiedName="org.jetbrains.kotlin.scriptDefinitionContributor"
-            interface="org.jetbrains.kotlin.idea.core.script.ScriptDefinitionContributor"
-            area="IDEA_PROJECT"
-            dynamic="true"/>
-
-    <extensionPoint
-            qualifiedName="org.jetbrains.kotlin.scriptTemplatesProvider"
-            interface="org.jetbrains.kotlin.script.ScriptTemplatesProvider"
-            area="IDEA_PROJECT"/>
 
     <extensionPoint
             qualifiedName="org.jetbrains.kotlin.ideScriptConfigurationControlFacade"
@@ -94,11 +88,11 @@
     <projectService serviceInterface="org.jetbrains.kotlin.idea.core.script.ScriptConfigurationManager"
                     serviceImplementation="org.jetbrains.kotlin.idea.core.script.configuration.CompositeScriptConfigurationManager"/>
 
-    <projectService serviceInterface="org.jetbrains.kotlin.scripting.definitions.ScriptDependenciesProvider"
-                    serviceImplementation="org.jetbrains.kotlin.idea.core.script.k2.ScriptConfigurationDataProvider"/>
+    <projectService serviceInterface="org.jetbrains.kotlin.scripting.definitions.ScriptConfigurationsProvider"
+                    serviceImplementation="org.jetbrains.kotlin.idea.core.script.k2.ScriptConfigurationsProviderImpl"/>
 
     <projectService serviceInterface="org.jetbrains.kotlin.scripting.resolve.ScriptReportSink"
-                    serviceImplementation="org.jetbrains.kotlin.idea.core.script.IdeScriptReportSink"/>
+                    serviceImplementation="org.jetbrains.kotlin.idea.core.script.KotlinScriptingReportsSink"/>
 
     <cachesInvalidator implementation="org.jetbrains.kotlin.idea.core.script.ucache.ScriptCacheDependenciesFileInvalidator"/>
 

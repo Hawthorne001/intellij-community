@@ -10,12 +10,14 @@ import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.DumbService;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.ComponentWithBrowseButton;
 import com.intellij.openapi.ui.VerticalFlowLayout;
 import com.intellij.openapi.util.NlsContexts;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiType;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.ui.ContextHelpLabel;
 import com.intellij.ui.JBColor;
@@ -32,18 +34,21 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.*;
 
 public abstract class TemplateChooserStep extends StepAdapter {
   private final JComponent myPanel;
   private final ComboBox<String> myComboBox;
   private final EqualsHashCodeTemplatesManagerBase myTemplatesManager;
+  private final boolean myShowEqualsOptions;
   private @Nullable Set<String> myInvalidTemplates = null;
 
   protected TemplateChooserStep(PsiElement contextElement, EqualsHashCodeTemplatesManagerBase templatesManager) {
+    this(contextElement, templatesManager, true);
+  }
+
+  protected TemplateChooserStep(PsiElement contextElement, EqualsHashCodeTemplatesManagerBase templatesManager, boolean showEqualsOptions) {
+    myShowEqualsOptions = showEqualsOptions;
     myPanel = new JPanel(new VerticalFlowLayout());
     final JPanel templateChooserPanel = new JPanel(new BorderLayout());
     final JLabel templateChooserLabel = new JLabel(JavaBundle.message("generate.equals.hashcode.template"));
@@ -57,10 +62,10 @@ public abstract class TemplateChooserStep extends StepAdapter {
                                   .toArray(String[]::new));
     myComboBox.setSelectedItem(myTemplatesManager.getDefaultTemplateBaseName());
     myComboBox.setSwingPopup(false);
+    Project project = contextElement.getProject();
     final ComponentWithBrowseButton<ComboBox<?>> comboBoxWithBrowseButton =
       new ComponentWithBrowseButton<>(myComboBox, e -> {
-        EqualsHashCodeTemplatesPanel ui = new EqualsHashCodeTemplatesPanel(contextElement.getProject(), myTemplatesManager);
-        ui.selectNodeInTree(myTemplatesManager.getDefaultTemplateBaseName());
+        EqualsHashCodeTemplatesPanel ui = createTemplatesPanel(project);
         ShowSettingsUtil.getInstance().editConfigurable(myPanel, ui);
         String[] names = myTemplatesManager.getAllTemplates().stream()
           .map(EqualsHashCodeTemplatesManagerBase::getTemplateBaseName)
@@ -72,11 +77,11 @@ public abstract class TemplateChooserStep extends StepAdapter {
     templateChooserLabel.setLabelFor(myComboBox);
     ReadAction.nonBlocking(() -> {
         GlobalSearchScope resolveScope = contextElement.getResolveScope();
-        JavaPsiFacade psiFacade = JavaPsiFacade.getInstance(contextElement.getProject());
+        JavaPsiFacade psiFacade = JavaPsiFacade.getInstance(project);
         Set<String> names = new LinkedHashSet<>();
         Set<String> invalid = new HashSet<>();
 
-        DumbService dumbService = DumbService.getInstance(contextElement.getProject());
+        DumbService dumbService = DumbService.getInstance(project);
         for (TemplateResource resource : myTemplatesManager.getAllTemplates()) {
           String templateBaseName = EqualsHashCodeTemplatesManagerBase.getTemplateBaseName(resource);
           if (names.add(templateBaseName)) {
@@ -110,30 +115,48 @@ public abstract class TemplateChooserStep extends StepAdapter {
     appendAdditionalOptions(myPanel);
   }
 
+  private @NotNull EqualsHashCodeTemplatesPanel createTemplatesPanel(Project project) {
+    EqualsHashCodeTemplatesPanel ui = new EqualsHashCodeTemplatesPanel(project, myTemplatesManager) {
+      @Override
+      protected @NotNull Map<String, PsiType> getEqualsImplicitVars() {
+        return myTemplatesManager.getEqualsImplicitVars(project);
+      }
+
+      @Override
+      protected @NotNull Map<String, PsiType> getHashCodeImplicitVars() {
+        return myTemplatesManager.getHashCodeImplicitVars(project);
+      }
+    };
+    ui.selectNodeInTree(myTemplatesManager.getDefaultTemplateBaseName());
+    return ui;
+  }
+
   protected void appendAdditionalOptions(JComponent stepPanel) {
     boolean useInstanceof = CodeInsightSettings.getInstance().USE_INSTANCEOF_ON_EQUALS_PARAMETER;
     JPanel panel = new JPanel();
     panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
-    JLabel label = new JLabel(JavaBundle.message("generate.equals.hashcode.type.comparison.label"));
-    label.setBorder(JBUI.Borders.emptyTop(UIUtil.LARGE_VGAP));
-    panel.add(label);
-    ContextHelpLabel contextHelp = ContextHelpLabel.create(JavaBundle.message("generate.equals.hashcode.comparison.table"));
-    contextHelp.setBorder(JBUI.Borders.empty(UIUtil.LARGE_VGAP, 2, 0, 0));
-    panel.add(contextHelp);
-    JRadioButton instanceofButton =
-      new JRadioButton(JavaBundle.message("generate.equals.hashcode.instanceof.type.comparison"), useInstanceof);
-    instanceofButton.setBorder(JBUI.Borders.emptyLeft(16));
-    JRadioButton getClassButton =
-      new JRadioButton(JavaBundle.message("generate.equals.hashcode.getclass.type.comparison"), !useInstanceof);
-    getClassButton.setBorder(JBUI.Borders.emptyLeft(16));
-    ButtonGroup group = new ButtonGroup();
-    group.add(instanceofButton);
-    group.add(getClassButton);
-    instanceofButton.addActionListener(e -> CodeInsightSettings.getInstance().USE_INSTANCEOF_ON_EQUALS_PARAMETER = true);
-    getClassButton.addActionListener(e -> CodeInsightSettings.getInstance().USE_INSTANCEOF_ON_EQUALS_PARAMETER = false);
-    stepPanel.add(panel);
-    stepPanel.add(instanceofButton);
-    stepPanel.add(getClassButton);
+    if (myShowEqualsOptions) {
+      JLabel label = new JLabel(JavaBundle.message("generate.equals.hashcode.type.comparison.label"));
+      label.setBorder(JBUI.Borders.emptyTop(UIUtil.LARGE_VGAP));
+      panel.add(label);
+      ContextHelpLabel contextHelp = ContextHelpLabel.create(JavaBundle.message("generate.equals.hashcode.comparison.table"));
+      contextHelp.setBorder(JBUI.Borders.empty(UIUtil.LARGE_VGAP, 2, 0, 0));
+      panel.add(contextHelp);
+      JRadioButton instanceofButton =
+        new JRadioButton(JavaBundle.message("generate.equals.hashcode.instanceof.type.comparison"), useInstanceof);
+      instanceofButton.setBorder(JBUI.Borders.emptyLeft(16));
+      JRadioButton getClassButton =
+        new JRadioButton(JavaBundle.message("generate.equals.hashcode.getclass.type.comparison"), !useInstanceof);
+      getClassButton.setBorder(JBUI.Borders.emptyLeft(16));
+      ButtonGroup group = new ButtonGroup();
+      group.add(instanceofButton);
+      group.add(getClassButton);
+      instanceofButton.addActionListener(e -> CodeInsightSettings.getInstance().USE_INSTANCEOF_ON_EQUALS_PARAMETER = true);
+      getClassButton.addActionListener(e -> CodeInsightSettings.getInstance().USE_INSTANCEOF_ON_EQUALS_PARAMETER = false);
+      stepPanel.add(panel);
+      stepPanel.add(instanceofButton);
+      stepPanel.add(getClassButton);
+    }
 
     final JCheckBox gettersCheckbox = createUseGettersInsteadOfFieldsCheckbox();
     if (gettersCheckbox != null) {

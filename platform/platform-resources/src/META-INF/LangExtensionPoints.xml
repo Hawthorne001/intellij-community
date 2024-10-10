@@ -158,7 +158,6 @@
     <extensionPoint name="gotoActionAliasMatcher" interface="com.intellij.ide.util.gotoByName.GotoActionAliasMatcher" dynamic="true"/>
     <extensionPoint name="gotoClassContributor" interface="com.intellij.navigation.ChooseByNameContributor" dynamic="true"/>
     <extensionPoint name="gotoSymbolContributor" interface="com.intellij.navigation.ChooseByNameContributor" dynamic="true"/>
-    <extensionPoint name="gotoPrimeSymbolContributor" interface="com.intellij.navigation.ChooseByNameContributor" dynamic="true"/>
     <extensionPoint name="gotoFileContributor" interface="com.intellij.navigation.ChooseByNameContributor" dynamic="true"/>
     <extensionPoint name="gotoRelatedProvider" interface="com.intellij.navigation.GotoRelatedProvider" dynamic="true"/>
 
@@ -171,6 +170,7 @@
     <extensionPoint name="searchEverywhereSpellingCorrector" interface="com.intellij.ide.actions.searcheverywhere.SearchEverywhereSpellingCorrectorFactory" dynamic="true"/>
     <extensionPoint name="searchEverywhereRemoteConverter" interface="com.intellij.ide.actions.searcheverywhere.remote.RemoteSearchEverywhereConverterSupplier" dynamic="true"/>
     <extensionPoint name="searchEverywhereReorderingService" interface="com.intellij.ide.actions.searcheverywhere.SearchEverywhereReorderingService" dynamic="true"/>
+    <extensionPoint name="searchEverywherePreviewPrimaryUsageFinder" interface="com.intellij.ide.actions.searcheverywhere.SearchEverywherePreviewPrimaryUsageFinder" dynamic="true" />
 
     <extensionPoint name="runAnything.executionProvider" interface="com.intellij.ide.actions.runAnything.activity.RunAnythingProvider" dynamic="true"/>
     <extensionPoint name="runAnything.commandHandler" interface="com.intellij.ide.actions.runAnything.handlers.RunAnythingCommandHandler" dynamic="true"/>
@@ -706,5 +706,8 @@
     <extensionPoint qualifiedName="com.intellij.mlCompletionFeaturesCollector" dynamic="true" beanClass="com.intellij.lang.LanguageExtensionPoint">
         <with attribute="implementationClass" implements="com.intellij.codeInsight.inline.completion.features.InlineCompletionFeaturesCollector"/>
     </extensionPoint>
+
+    <extensionPoint qualifiedName="com.intellij.newFileActionCategoryHandler" dynamic="true"
+                    interface="com.intellij.ide.actions.NewFileActionCategoryHandler"/>
   </extensionPoints>
 </idea-plugin>

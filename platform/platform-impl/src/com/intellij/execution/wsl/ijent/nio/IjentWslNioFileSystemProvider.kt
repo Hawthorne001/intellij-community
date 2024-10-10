@@ -6,12 +6,14 @@ import com.intellij.execution.wsl.WslPath
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.util.io.CaseSensitivityAttribute
 import com.intellij.openapi.util.io.FileAttributes
+import com.intellij.platform.core.nio.fs.BasicFileAttributesHolder2
+import com.intellij.platform.core.nio.fs.BasicFileAttributesHolder2.FetchAttributesFilter
 import com.intellij.platform.core.nio.fs.RoutingAwareFileSystemProvider
-import com.intellij.platform.ijent.IjentPosixInfo
+import com.intellij.platform.eel.EelUserPosixInfo
+import com.intellij.platform.ijent.community.impl.nio.EelPosixGroupPrincipal
+import com.intellij.platform.ijent.community.impl.nio.EelPosixUserPrincipal
 import com.intellij.platform.ijent.community.impl.nio.IjentNioPath
 import com.intellij.platform.ijent.community.impl.nio.IjentNioPosixFileAttributes
-import com.intellij.platform.ijent.community.impl.nio.IjentPosixGroupPrincipal
-import com.intellij.platform.ijent.community.impl.nio.IjentPosixUserPrincipal
 import com.intellij.util.io.createDirectories
 import com.intellij.util.io.sanitizeFileName
 import org.jetbrains.annotations.VisibleForTesting
@@ -181,9 +183,9 @@ class IjentWslNioFileSystemProvider(
             val dosAttributes =
               if (cachedAttrs != null)
                 IjentNioPosixFileAttributesWithDosAdapter(
-                  ijentPath.fileSystem.ijentFs.user as IjentPosixInfo.User,
+                  ijentPath.fileSystem.ijentFs.user as EelUserPosixInfo,
                   cachedAttrs,
-                  nameStartsWithDot = ijentPath.ijentPath.fileName.startsWith("."),
+                  nameStartsWithDot = ijentPath.eelPath.fileName.startsWith("."),
                 )
               else null
 
@@ -274,7 +276,7 @@ class IjentWslNioFileSystemProvider(
 
       is PosixFileAttributes ->
         IjentNioPosixFileAttributesWithDosAdapter(
-          ijentNioPath.fileSystem.ijentFs.user as IjentPosixInfo.User,
+          ijentNioPath.fileSystem.ijentFs.user as EelUserPosixInfo,
           actualAttrs, path.name.startsWith("."),
         )
 
@@ -315,11 +317,9 @@ class IjentWslNioFileSystemProvider(
           lastDirectory = lastDirectory.parent
         }
 
-        // TODO Add BasicFileAttributesHolder, it gives a huge speed up.
-        //val stat =
-        //  source.asSafely<BasicFileAttributesHolder>()?.get()
-        //  ?: source.readAttributes(LinkOption.NOFOLLOW_LINKS)
-        val stat = source.readAttributes<BasicFileAttributes>(LinkOption.NOFOLLOW_LINKS)
+        val stat =
+          BasicFileAttributesHolder2.getAttributesFromHolder(source)
+          ?: source.readAttributes(LinkOption.NOFOLLOW_LINKS)
 
         // WindowsPath doesn't support resolve() from paths of different class.
         val target = source.relativeTo(sourceRoot).fold(targetRoot) { parent, file ->
@@ -337,7 +337,7 @@ class IjentWslNioFileSystemProvider(
                 throw err
               }
             }
-            Files.newDirectoryStream(source).use { children ->
+            source.fileSystem.provider().newDirectoryStream(source, FetchAttributesFilter.ACCEPT_ALL).use { children ->
               sourceStack.addAll(children.toList().asReversed())
             }
           }
@@ -369,7 +369,7 @@ class IjentWslNioFileSystemProvider(
 
 @VisibleForTesting
 class IjentNioPosixFileAttributesWithDosAdapter(
-  private val userInfo: IjentPosixInfo.User,
+  private val userInfo: EelUserPosixInfo,
   private val fileInfo: PosixFileAttributes,
   private val nameStartsWithDot: Boolean,
 ) : CaseSensitivityAttribute, PosixFileAttributes by fileInfo, DosFileAttributes {
@@ -381,10 +381,10 @@ class IjentNioPosixFileAttributesWithDosAdapter(
     val owner = owner()
     val group = group()
     return when {
-      owner is IjentPosixUserPrincipal && owner.uid == userInfo.uid ->
+      owner is EelPosixUserPrincipal && owner.uid == userInfo.uid ->
         OWNER_WRITE !in permissions() || (isDirectory && OWNER_EXECUTE !in permissions())
 
-      group is IjentPosixGroupPrincipal && group.gid == userInfo.gid ->
+      group is EelPosixGroupPrincipal && group.gid == userInfo.gid ->
         GROUP_WRITE !in permissions() || (isDirectory && GROUP_EXECUTE !in permissions())
 
       else ->

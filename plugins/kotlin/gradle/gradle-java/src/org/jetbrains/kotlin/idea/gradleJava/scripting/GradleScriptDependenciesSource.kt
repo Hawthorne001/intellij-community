@@ -3,15 +3,19 @@ package org.jetbrains.kotlin.idea.gradleJava.scripting
 
 import com.intellij.openapi.externalSystem.service.execution.ExternalSystemJdkUtil
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.projectRoots.JavaSdkType
 import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.backend.workspace.workspaceModel
+import com.intellij.platform.workspace.storage.EntitySource
 import com.intellij.platform.workspace.storage.MutableEntityStorage
+import com.intellij.platform.workspace.storage.url.VirtualFileUrl
 import org.jetbrains.kotlin.idea.base.util.runReadActionInSmartMode
+import org.jetbrains.kotlin.idea.core.script.KotlinScriptEntitySource
 import org.jetbrains.kotlin.idea.core.script.SCRIPT_DEPENDENCIES_SOURCES
 import org.jetbrains.kotlin.idea.core.script.ScriptConfigurationManager.Companion.toVfsRoots
-import org.jetbrains.kotlin.idea.core.script.creteScriptModules
+import org.jetbrains.kotlin.idea.core.script.getUpdatedStorage
 import org.jetbrains.kotlin.idea.core.script.k2.BaseScriptModel
 import org.jetbrains.kotlin.idea.core.script.k2.ScriptDependenciesData
 import org.jetbrains.kotlin.idea.core.script.k2.ScriptDependenciesSource
@@ -39,16 +43,20 @@ class GradleScriptModel(
 ) : BaseScriptModel(virtualFile)
 
 open class GradleScriptDependenciesSource(override val project: Project) : ScriptDependenciesSource<GradleScriptModel>(project) {
+    private val gradleEntitySourceFilter: (EntitySource) -> Boolean =
+        { entitySource -> entitySource is KotlinGradleScriptModuleEntitySource }
+
     override suspend fun updateModules(dependencies: ScriptDependenciesData, storage: MutableEntityStorage?) {
-        val workspaceModel = project.workspaceModel
-        val storageSnapshot = workspaceModel.currentSnapshot
-        val tempStorage = MutableEntityStorage.from(storageSnapshot)
+        val storageWithGradleScriptModules = getUpdatedStorage(
+            project, dependencies
+        ) { KotlinGradleScriptModuleEntitySource(it) }
 
-        creteScriptModules(project, dependencies, storage ?: tempStorage)
-
-        if (storage == null) {
+        if (storage != null) {
+            storage.replaceBySource(gradleEntitySourceFilter, storageWithGradleScriptModules)
+        } else {
+            val workspaceModel = project.workspaceModel
             workspaceModel.update("Updating Gradle Kotlin Scripts modules") {
-                it.applyChangesFrom(tempStorage)
+                it.replaceBySource(gradleEntitySourceFilter, storageWithGradleScriptModules)
             }
         }
     }
@@ -65,7 +73,9 @@ open class GradleScriptDependenciesSource(override val project: Project) : Scrip
             val sourceCode = VirtualFileScriptSource(script.virtualFile)
             val definition = findScriptDefinition(project, sourceCode)
 
-            val javaHomePath = script.javaHome?.let { Path.of(it) }
+            val javaProjectSdk = ProjectRootManager.getInstance(project).projectSdk?.takeIf { it.sdkType is JavaSdkType }
+
+            val javaHomePath = (javaProjectSdk?.homePath ?: script.javaHome)?.let { Path.of(it) }
 
             val configuration = definition.compilationConfiguration.with {
                 javaHomePath?.let {
@@ -86,31 +96,27 @@ open class GradleScriptDependenciesSource(override val project: Project) : Scrip
             newClasses.addAll(toVfsRoots(configurationWrapper.dependenciesClassPath))
             newSources.addAll(toVfsRoots(configurationWrapper.dependenciesSources))
 
-            if (javaHomePath != null) {
+            if (javaProjectSdk != null) {
+                javaProjectSdk.homePath?.let { path ->
+                    sdks.computeIfAbsent(Path.of(path)) { javaProjectSdk }
+                }
+            } else if (javaHomePath != null) {
                 sdks.computeIfAbsent(javaHomePath) {
-                    val projectSdk = ProjectRootManager.getInstance(project).projectSdk
-
-                    if (projectSdk != null && projectSdk.homePath == script.javaHome) {
-                        projectSdk
-                    } else {
-                        ExternalSystemJdkUtil.lookupJdkByPath(it.pathString)
-                    }
+                    ExternalSystemJdkUtil.lookupJdkByPath(it.pathString)
                 }
             }
         }
 
         return ScriptDependenciesData(
-            newConfigurations,
-            newClasses,
-            newSources,
-            sdks
+            newConfigurations, newClasses, newSources, sdks
         )
     }
 
     companion object {
         fun getInstance(project: Project): GradleScriptDependenciesSource? =
-            SCRIPT_DEPENDENCIES_SOURCES.getExtensions(project)
-                .filterIsInstance<GradleScriptDependenciesSource>().firstOrNull()
+            SCRIPT_DEPENDENCIES_SOURCES.getExtensions(project).filterIsInstance<GradleScriptDependenciesSource>().firstOrNull()
                 .safeAs<GradleScriptDependenciesSource>()
     }
+
+    data class KotlinGradleScriptModuleEntitySource(override val virtualFileUrl: VirtualFileUrl) : KotlinScriptEntitySource(virtualFileUrl)
 }

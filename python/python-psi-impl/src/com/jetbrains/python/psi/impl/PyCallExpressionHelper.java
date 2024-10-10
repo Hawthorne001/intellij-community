@@ -539,15 +539,7 @@ public final class PyCallExpressionHelper {
         }
       }
     }
-    if (callee instanceof PySubscriptionExpression subscriptionExpression) {
-      PyExpression operandExpr = subscriptionExpression.getOperand();
-      PyType operandType = context.getType(operandExpr);
-      if (operandType instanceof PyClassType classType) {
-        PyType parameterizeClassWithDefaults = PyTypingTypeProvider.tryParameterizeClassWithDefaults(classType, callee, true, context);
-        if (parameterizeClassWithDefaults instanceof PyCollectionType) {
-          return parameterizeClassWithDefaults;
-        }
-      }
+    if (callee instanceof PySubscriptionExpression) {
       final PyType parametrizedType = Ref.deref(PyTypingTypeProvider.getType(callee, context));
       if (parametrizedType != null) {
         return parametrizedType;
@@ -656,13 +648,6 @@ public final class PyCallExpressionHelper {
       if (initOrNewCallType instanceof PyCollectionType) {
         final List<PyType> elementTypes = ((PyCollectionType)initOrNewCallType).getElementTypes();
         return new PyCollectionTypeImpl(receiverClass, false, elementTypes);
-      }
-
-      if (initOrNewCallType instanceof PyClassType classType) {
-        PyType implicitlyParameterized = PyTypingTypeProvider.tryParameterizeClassWithDefaults(classType, callSite, true, context);
-        if (implicitlyParameterized instanceof PyCollectionType collectionType) {
-          return collectionType.toInstance();
-        }
       }
 
       return new PyClassTypeImpl(receiverClass, false);

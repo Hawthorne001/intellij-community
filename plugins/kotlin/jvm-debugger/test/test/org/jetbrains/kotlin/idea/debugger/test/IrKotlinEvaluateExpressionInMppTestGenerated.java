@@ -652,6 +652,11 @@ public abstract class IrKotlinEvaluateExpressionInMppTestGenerated extends Abstr
                     runTest("testData/evaluation/singleBreakpoint/coroutines/suspendFunctionWithInlineClass.kt");
                 }
 
+                @TestMetadata("suspendFunctionsFromNonSuspendCode.kt")
+                public void testSuspendFunctionsFromNonSuspendCode() throws Exception {
+                    runTest("testData/evaluation/singleBreakpoint/coroutines/suspendFunctionsFromNonSuspendCode.kt");
+                }
+
                 @TestMetadata("suspendFunctionsWithContext.kt")
                 public void testSuspendFunctionsWithContext() throws Exception {
                     runTest("testData/evaluation/singleBreakpoint/coroutines/suspendFunctionsWithContext.kt");
@@ -2657,6 +2662,11 @@ public abstract class IrKotlinEvaluateExpressionInMppTestGenerated extends Abstr
         @TestMetadata("functionBreakpointInCommonCode.kt")
         public void testFunctionBreakpointInCommonCode() throws Exception {
             runTest("testData/evaluation/multiplatform/functionBreakpointInCommonCode.kt");
+        }
+
+        @TestMetadata("inlineFunWithDefaultArgument.kt")
+        public void testInlineFunWithDefaultArgument() throws Exception {
+            runTest("testData/evaluation/multiplatform/inlineFunWithDefaultArgument.kt");
         }
 
         @TestMetadata("interface.kt")

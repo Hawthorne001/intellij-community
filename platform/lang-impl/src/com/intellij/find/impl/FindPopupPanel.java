@@ -300,7 +300,7 @@ public final class FindPopupPanel extends JBPanel<FindPopupPanel> implements Fin
       IdeGlassPaneEx glass = (IdeGlassPaneEx)myDialog.getRootPane().getGlassPane();
       boolean toolkitCannotResizeUndecorated = !StartupUiUtil.isWaylandToolkit();
       if (toolkitCannotResizeUndecorated) {
-        new WindowResizeListenerEx(glass, root, JBUI.insets(4), null)
+        new WindowResizeListenerEx(glass, root, true)
           .install(myDisposable);
       }
 
@@ -1260,7 +1260,8 @@ public final class FindPopupPanel extends JBPanel<FindPopupPanel> implements Fin
 
       @Override
       public void onCancel() {
-        if (isShowing() && progressIndicatorWhenSearchStarted == myResultsPreviewSearchProgress) {
+        if (isShowing() && progressIndicatorWhenSearchStarted == myResultsPreviewSearchProgress &&
+            !progressIndicatorWhenSearchStarted.isCanceled()) {
           scheduleResultsUpdate();
         }
       }

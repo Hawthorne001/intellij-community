@@ -30,6 +30,7 @@ import com.intellij.util.ObjectUtils;
 import com.intellij.util.PlatformUtils;
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread;
 import com.intellij.util.containers.ContainerUtil;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -50,8 +51,9 @@ public class PackageViewPane extends AbstractProjectViewPaneWithAsyncSupport {
     super(project);
   }
 
+  @ApiStatus.Internal
   @Override
-  protected void configureAsyncSupport(@NotNull AsyncProjectViewSupport support) {
+  protected void configureAsyncSupport(@NotNull ProjectViewPaneSupport support) {
     support.setMultiSelectionEnabled(false);
   }
 
@@ -152,7 +154,7 @@ public class PackageViewPane extends AbstractProjectViewPaneWithAsyncSupport {
   protected @NotNull ProjectAbstractTreeStructureBase createStructure() {
     return new ProjectTreeStructure(myProject, ID){
       @Override
-      protected AbstractTreeNode createRoot(final @NotNull Project project, @NotNull ViewSettings settings) {
+      protected AbstractTreeNode<?> createRoot(final @NotNull Project project, @NotNull ViewSettings settings) {
         return new PackageViewProjectNode(project, settings);
       }
 

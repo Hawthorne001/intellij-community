@@ -1,7 +1,6 @@
 // Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.platform.eel
 
-import com.intellij.openapi.util.NlsSafe
 import com.intellij.platform.eel.EelTunnelsApi.Connection
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -36,7 +35,7 @@ sealed interface EelTunnelsApi {
    *
    * One should not forget to invoke [Connection.close] when the connection is not needed.
    */
-  suspend fun getConnectionToRemotePort(address: HostAddress): EelNetworkResult<Connection, EelConnectionError>
+  suspend fun getConnectionToRemotePort(address: HostAddress): EelResult<Connection, EelConnectionError>
 
   /**
    * Creates a builder for address on the remote host.
@@ -204,7 +203,7 @@ sealed interface EelTunnelsApi {
    *
    * One should not forget to invoke [Connection.close] when the connection is not needed.
    */
-  suspend fun getAcceptorForRemotePort(address: HostAddress): EelNetworkResult<ConnectionAcceptor, EelConnectionError>
+  suspend fun getAcceptorForRemotePort(address: HostAddress): EelResult<ConnectionAcceptor, EelConnectionError>
 
   /**
    * This is a representation of a remote server bound to [boundAddress].
@@ -311,8 +310,8 @@ suspend fun <T> EelTunnelsApi.withConnectionToRemotePort(
   action: suspend CoroutineScope.(Connection) -> T,
 ): T =
   when (val connectionResult = getConnectionToRemotePort(hostAddress)) {
-    is EelNetworkResult.Error -> errorHandler(connectionResult.error)
-    is EelNetworkResult.Ok -> closeWithExceptionHandling({ action(connectionResult.value) }, { connectionResult.value.close() })
+    is EelResult.Error -> errorHandler(connectionResult.error)
+    is EelResult.Ok -> closeWithExceptionHandling({ action(connectionResult.value) }, { connectionResult.value.close() })
   }
 
 private suspend fun <T> closeWithExceptionHandling(action: suspend CoroutineScope.() -> T, close: suspend () -> Unit): T {
@@ -360,8 +359,8 @@ suspend fun <T> EelTunnelsApi.withAcceptorForRemotePort(
   action: suspend CoroutineScope.(EelTunnelsApi.ConnectionAcceptor) -> T,
 ): T =
   when (val connectionResult = getAcceptorForRemotePort(hostAddress)) {
-    is EelNetworkResult.Error -> errorHandler(connectionResult.error)
-    is EelNetworkResult.Ok -> closeWithExceptionHandling({ action(connectionResult.value) }, { connectionResult.value.close() })
+    is EelResult.Error -> errorHandler(connectionResult.error)
+    is EelResult.Ok -> closeWithExceptionHandling({ action(connectionResult.value) }, { connectionResult.value.close() })
   }
 
 /**
@@ -370,29 +369,10 @@ suspend fun <T> EelTunnelsApi.withAcceptorForRemotePort(
 sealed interface EelNetworkError
 
 /**
- * Represents a result of a network operation
- */
-sealed interface EelNetworkResult<out T, out E : EelNetworkError> {
-  /**
-   * Used when a network operation completed successfully
-   */
-  interface Ok<out T> : EelNetworkResult<T, Nothing> {
-    val value: T
-  }
-
-  /**
-   * Used when a network operation completed with an error
-   */
-  interface Error<out E : EelNetworkError> : EelNetworkResult<Nothing, E> {
-    val error: E
-  }
-}
-
-/**
  * An error that can happen during the creation of a connection to a remote server
  */
 interface EelConnectionError : EelNetworkError {
-  val message: @NlsSafe String
+  val message: String
 
   /**
    * Returned when the remote host cannot create an object of a socket.

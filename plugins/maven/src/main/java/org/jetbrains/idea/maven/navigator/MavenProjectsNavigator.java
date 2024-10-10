@@ -31,6 +31,7 @@ import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.openapi.wm.ex.ToolWindowManagerEx;
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener;
 import com.intellij.ui.AppUIUtil;
+import com.intellij.ui.RemoteTransferUIManager;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.content.ContentManager;
@@ -51,7 +52,6 @@ import org.jetbrains.idea.maven.navigator.structure.MavenProjectsNavigatorPanel;
 import org.jetbrains.idea.maven.navigator.structure.MavenProjectsStructure;
 import org.jetbrains.idea.maven.project.*;
 import org.jetbrains.idea.maven.server.MavenIndexUpdateState;
-import org.jetbrains.idea.maven.server.NativeMavenProjectHolder;
 import org.jetbrains.idea.maven.tasks.MavenShortcutsManager;
 import org.jetbrains.idea.maven.tasks.MavenTasksManager;
 import org.jetbrains.idea.maven.utils.MavenLog;
@@ -339,6 +339,7 @@ public final class MavenProjectsNavigator extends MavenSimpleProjectComponent
     group.add(actionManager.getAction("Maven.ShowVersions"));
 
     toolWindow.setAdditionalGearActions(group);
+    RemoteTransferUIManager.forceDirectTransfer(panel);
   }
 
   private void initTree() {
@@ -481,8 +482,7 @@ public final class MavenProjectsNavigator extends MavenSimpleProjectComponent
     }
 
     @Override
-    public void projectResolved(@NotNull Pair<MavenProject, MavenProjectChanges> projectWithChanges,
-                                NativeMavenProjectHolder nativeMavenProject) {
+    public void projectResolved(@NotNull Pair<MavenProject, MavenProjectChanges> projectWithChanges) {
       scheduleUpdateProjects(Collections.singletonList(projectWithChanges.first), Collections.emptyList());
     }
 

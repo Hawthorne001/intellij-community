@@ -3,7 +3,7 @@
 package org.jetbrains.kotlin.idea.debugger.evaluate
 
 import com.intellij.debugger.DebuggerManagerEx
-import com.intellij.debugger.engine.evaluation.CodeFragmentFactory
+import com.intellij.debugger.engine.JavaDebuggerCodeFragmentFactory
 import com.intellij.debugger.engine.evaluation.TextWithImports
 import com.intellij.debugger.engine.events.DebuggerCommandImpl
 import com.intellij.debugger.impl.DebuggerContextImpl
@@ -27,7 +27,7 @@ import org.jetbrains.kotlin.idea.core.syncNonBlockingReadAction
 import org.jetbrains.kotlin.idea.core.util.CodeFragmentUtils
 import org.jetbrains.kotlin.idea.debugger.base.util.hopelessAware
 import org.jetbrains.kotlin.idea.debugger.core.CodeFragmentContextTuner
-import org.jetbrains.kotlin.idea.debugger.evaluate.compilation.DebugLabelPropertyDescriptorProvider
+import org.jetbrains.kotlin.idea.debugger.evaluate.compilation.DebugForeignPropertyDescriptorProvider
 import org.jetbrains.kotlin.j2k.OldJ2kPostProcessor
 import org.jetbrains.kotlin.idea.j2k.convertToKotlin
 import org.jetbrains.kotlin.idea.j2k.j2kText
@@ -39,13 +39,11 @@ import org.jetbrains.kotlin.psi.psiUtil.quoteIfNeeded
 import org.jetbrains.kotlin.types.KotlinType
 import java.util.concurrent.atomic.AtomicReference
 
-class KotlinK1CodeFragmentFactory : CodeFragmentFactory() {
-    override fun createCodeFragment(item: TextWithImports, context: PsiElement?, project: Project): JavaCodeFragment {
+class KotlinK1CodeFragmentFactory : JavaDebuggerCodeFragmentFactory() {
+    override fun createPsiCodeFragmentImpl(item: TextWithImports, context: PsiElement?, project: Project): JavaCodeFragment {
         val contextElement = CodeFragmentContextTuner.getInstance().tuneContextElement(context)
 
         val codeFragment = KtBlockCodeFragment(project, "fragment.kt", item.text, initImports(item.imports), contextElement)
-
-        supplyDebugInformation(codeFragment, context)
 
         codeFragment.putCopyableUserData(CodeFragmentUtils.RUNTIME_TYPE_EVALUATOR) { expression: KtExpression ->
             val debuggerContext = DebuggerManagerEx.getInstanceEx(project).context
@@ -127,6 +125,8 @@ class KotlinK1CodeFragmentFactory : CodeFragmentFactory() {
             }
         }
 
+        supplyDebugInformation(codeFragment, context)
+
         return codeFragment
     }
 
@@ -137,7 +137,7 @@ class KotlinK1CodeFragmentFactory : CodeFragmentFactory() {
     private fun supplyDebugInformation(codeFragment: KtCodeFragment, context: PsiElement?) {
         val project = codeFragment.project
         val debugProcess = DebugContextProvider.getDebuggerContext(project, context)?.debugProcess ?: return
-        DebugLabelPropertyDescriptorProvider(codeFragment, debugProcess).supplyDebugLabels()
+        DebugForeignPropertyDescriptorProvider(codeFragment, debugProcess).supplyDebugForeignProperties()
     }
 
     private fun getFrameInfo(project: Project, contextElement: PsiElement?, debuggerContext: DebuggerContextImpl): FrameInfo? {
@@ -199,8 +199,8 @@ class KotlinK1CodeFragmentFactory : CodeFragmentFactory() {
         return import
     }
 
-    override fun createPresentationCodeFragment(item: TextWithImports, context: PsiElement?, project: Project): JavaCodeFragment {
-        val kotlinCodeFragment = createCodeFragment(item, context, project)
+    override fun createPresentationPsiCodeFragmentImpl(item: TextWithImports, context: PsiElement?, project: Project): JavaCodeFragment? {
+        val kotlinCodeFragment = createPsiCodeFragment(item, context, project) ?: return null
         if (PsiTreeUtil.hasErrorElements(kotlinCodeFragment) && kotlinCodeFragment is KtCodeFragment) {
             val javaExpression = try {
                 PsiElementFactory.getInstance(project).createExpressionFromText(item.text, context)

@@ -13,19 +13,18 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.parents
-import com.intellij.util.concurrency.annotations.RequiresBlockingContext
 import com.intellij.util.concurrency.annotations.RequiresReadLock
 
 internal object InlineCompletionContextLogs {
   @RequiresReadLock
-  @RequiresBlockingContext
   fun getFor(request: InlineCompletionRequest): List<EventPair<*>> {
     val element = if (request.startOffset == 0) null else request.file.findElementAt(request.startOffset - 1)
     val simple = captureSimple(request.file, request.editor, request.startOffset, element)
+    val typingFeatures = getTypingSpeedFeatures()
     val featureCollectorBased = InlineCompletionFeaturesCollector.get(request.file.language)?.let {
       captureFeatureCollectorBased(request.file, request.startOffset, it, element)
     }
-    return simple + featureCollectorBased.orEmpty()
+    return simple + typingFeatures + featureCollectorBased.orEmpty()
   }
 
   private fun captureSimple(psiFile: PsiFile, editor: Editor, offset: Int, element: PsiElement?): List<EventPair<*>> {
@@ -106,6 +105,7 @@ internal object InlineCompletionContextLogs {
   private fun captureFeatureCollectorBased(file: PsiFile, offset: Int, featuresCollector: InlineCompletionFeaturesCollector, element: PsiElement?): List<EventPair<*>> {
     val result = mutableListOf<EventPair<*>>()
     result.addAll(addImportFeatures(featuresCollector, file))
+    result.addAll(getExtendedScopeFeatures(featuresCollector, file, offset))
 
     element ?: return result
 
@@ -120,7 +120,6 @@ internal object InlineCompletionContextLogs {
     featuresCollector.isInForStatement(element)?.let { result.add(Logs.IS_IN_FOR_STATEMENT with it) }
     result.add(Logs.BLOCK_STATEMENT_LEVEL with featuresCollector.getBlockStatementLevel(element))
 
-    result += getExtendedScopeFeatures(featuresCollector, file, offset)
     return result
   }
 
@@ -222,6 +221,14 @@ internal object InlineCompletionContextLogs {
     return result
   }
 
+  private fun getTypingSpeedFeatures(): List<EventPair<*>> = buildList {
+    val tracker = TypingSpeedTracker.getInstance()
+    tracker.getTimeSinceLastTyping()?.let {
+      add(Logs.TIME_SINCE_LAST_TYPING with it)
+      addAll(tracker.getTypingSpeedEventPairs().map { it.first })
+    }
+  }
+
   private object Logs : PhasedLogs(InlineCompletionLogsContainer.Phase.INLINE_API_STARTING) {
     val ELEMENT_PREFIX_LENGTH = register(EventFields.Int("element_prefix_length"))
     val LINE_NUMBER = register(EventFields.Int("line_number"))
@@ -276,6 +283,11 @@ internal object InlineCompletionContextLogs {
     val SCOPE_VALUABLE_SYMBOLS_BEFORE = scopeFeatures { EventFields.Boolean("${it}_scope_valuable_symbols_before", "False if in the ${it} scope before caret there are only whitespaces or statements/strings enclosures") }
     val SCOPE_VALUABLE_SYMBOLS_AFTER = scopeFeatures { EventFields.Boolean("${it}_scope_valuable_symbols_after", "False if in the ${it} scope after caret there are only whitespaces or statements/strings enclosures") }
     val SCOPE_HAS_ERROR_PSI = scopeFeatures { EventFields.Boolean("${it}_scope_has_error_psi", "True if in the ${it} scope there's any PsiError element") }
+
+    val TIME_SINCE_LAST_TYPING = register(EventFields.Long("time_since_last_typing", "Duration between current typing and previous one."))
+    val TYPING_SPEEDS = TypingSpeedTracker.getEventFields().map {
+      register(it)
+    }
 
     private fun <T> scopeFeatures(createFeatureDeclaration: (String) -> EventField<T>): List<EventField<T>> {
       return listOf(

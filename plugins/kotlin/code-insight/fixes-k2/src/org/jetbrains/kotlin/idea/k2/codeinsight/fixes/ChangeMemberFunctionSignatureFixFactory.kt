@@ -2,12 +2,7 @@
 package org.jetbrains.kotlin.idea.k2.codeinsight.fixes
 
 import com.intellij.codeInspection.util.IntentionFamilyName
-import com.intellij.modcommand.ActionContext
-import com.intellij.modcommand.ModChooseAction
-import com.intellij.modcommand.ModCommand
-import com.intellij.modcommand.ModCommandAction
-import com.intellij.modcommand.ModPsiUpdater
-import com.intellij.modcommand.Presentation
+import com.intellij.modcommand.*
 import com.intellij.openapi.util.NlsSafe
 import org.jetbrains.annotations.Nls
 import org.jetbrains.kotlin.analysis.api.KaExperimentalApi
@@ -16,15 +11,7 @@ import org.jetbrains.kotlin.analysis.api.fir.diagnostics.KaFirDiagnostic
 import org.jetbrains.kotlin.analysis.api.renderer.declarations.KaDeclarationRenderer
 import org.jetbrains.kotlin.analysis.api.renderer.declarations.impl.KaDeclarationRendererForSource
 import org.jetbrains.kotlin.analysis.api.renderer.declarations.renderers.classifiers.KaSingleTypeParameterSymbolRenderer
-import org.jetbrains.kotlin.analysis.api.symbols.KaClassSymbol
-import org.jetbrains.kotlin.analysis.api.symbols.KaFunctionSymbol
-import org.jetbrains.kotlin.analysis.api.symbols.KaNamedFunctionSymbol
-import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolModality
-import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolOrigin
-import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolVisibility
-import org.jetbrains.kotlin.analysis.api.symbols.KaValueParameterSymbol
-import org.jetbrains.kotlin.analysis.api.symbols.name
-import org.jetbrains.kotlin.analysis.api.symbols.receiverType
+import org.jetbrains.kotlin.analysis.api.symbols.*
 import org.jetbrains.kotlin.analysis.api.types.KaDefinitelyNotNullType
 import org.jetbrains.kotlin.analysis.api.types.KaFunctionType
 import org.jetbrains.kotlin.analysis.api.types.KaType
@@ -43,7 +30,7 @@ import org.jetbrains.kotlin.psi.KtPsiFactory
 import org.jetbrains.kotlin.psi.KtTypeParameterList
 import org.jetbrains.kotlin.psi.typeRefHelpers.setReceiverTypeReference
 import org.jetbrains.kotlin.types.Variance
-import java.util.BitSet
+import java.util.*
 
 object ChangeMemberFunctionSignatureFixFactory {
     val nothingToOverrideFixFactory = KotlinQuickFixFactory.ModCommandBased { diagnostic: KaFirDiagnostic.NothingToOverride ->
@@ -72,8 +59,7 @@ object ChangeMemberFunctionSignatureFixFactory {
     /**
      * Computes all the signatures a 'functionElement' could be changed to in order to remove NOTHING_TO_OVERRIDE error.
      */
-    context(KaSession)
-    private fun computePossibleSignatures(functionElement: KtNamedFunction): List<Signature> {
+    private fun KaSession.computePossibleSignatures(functionElement: KtNamedFunction): List<Signature> {
         if (functionElement.valueParameterList == null) { // we won't be able to modify its signature
             return emptyList()
         }
@@ -90,9 +76,8 @@ object ChangeMemberFunctionSignatureFixFactory {
     /**
      * Changes function's signature to match superFunction's signature. Returns new descriptor.
      */
-    context(KaSession)
     @OptIn(KaExperimentalApi::class)
-    private fun signatureToMatch(function: KaFunctionSymbol, superFunction: KaNamedFunctionSymbol): Signature {
+    private fun KaSession.signatureToMatch(function: KaFunctionSymbol, superFunction: KaNamedFunctionSymbol): Signature {
         val superParameters = superFunction.valueParameters
         val parameters = function.valueParameters
         val subClass = function.containingSymbol
@@ -120,11 +105,11 @@ object ChangeMemberFunctionSignatureFixFactory {
 
     private interface ParameterChooser {
         context(KaSession)
-        fun accept(parameter: KaValueParameterSymbol, superParameter: KaValueParameterSymbol, newTypes: KaType): Boolean
+        fun accept(parameter: KaValueParameterSymbol, superParameter: KaValueParameterSymbol, newType: KaType): Boolean
 
         object MatchNames : ParameterChooser {
             context(KaSession)
-            override fun accept(parameter: KaValueParameterSymbol, superParameter: KaValueParameterSymbol, newTypes: KaType): Boolean {
+            override fun accept(parameter: KaValueParameterSymbol, superParameter: KaValueParameterSymbol, newType: KaType): Boolean {
                 return parameter.name == superParameter.name
             }
         }
@@ -137,9 +122,8 @@ object ChangeMemberFunctionSignatureFixFactory {
         }
     }
 
-    context(KaSession)
     @OptIn(KaExperimentalApi::class)
-    private fun getSignature(
+    private fun KaSession.getSignature(
         types: List<KaType>,
         names: List<String>,
         superFunction: KaNamedFunctionSymbol,
@@ -193,8 +177,7 @@ object ChangeMemberFunctionSignatureFixFactory {
         }
     }
 
-    context(KaSession)
-    private fun matchParameters(
+    private fun KaSession.matchParameters(
         parameterChooser: ParameterChooser,
         superParameters: List<KaValueParameterSymbol>,
         parameters: List<KaValueParameterSymbol>,
@@ -218,14 +201,12 @@ object ChangeMemberFunctionSignatureFixFactory {
         }
     }
 
-    context(KaSession)
-    private fun getPossibleSuperFunctions(functionSymbol: KaFunctionSymbol): List<KaNamedFunctionSymbol> {
+    private fun KaSession.getPossibleSuperFunctions(functionSymbol: KaFunctionSymbol): List<KaNamedFunctionSymbol> {
         val containingClass = functionSymbol.containingSymbol as? KaClassSymbol ?: return emptyList()
 
         val name = functionSymbol.name ?: return emptyList()
         return containingClass.superTypes.flatMap { superType ->
-            (superType.symbol as? KaClassSymbol)?.memberScope?.callables(name)?.filterIsInstance<KaNamedFunctionSymbol>()
-                ?: emptySequence<KaNamedFunctionSymbol>()
+            (superType.symbol as? KaClassSymbol)?.memberScope?.callables(name)?.filterIsInstance<KaNamedFunctionSymbol>() ?: emptySequence()
         }.filter {
             it.origin != KaSymbolOrigin.INTERSECTION_OVERRIDE && it.origin != KaSymbolOrigin.SUBSTITUTION_OVERRIDE && it.modality != KaSymbolModality.FINAL && it.visibility != KaSymbolVisibility.PRIVATE
         }
@@ -240,7 +221,7 @@ object ChangeMemberFunctionSignatureFixFactory {
             return Presentation.of(text)
         }
 
-        override fun getFamilyName() = KotlinBundle.message("fix.change.signature.function.family")
+        override fun getFamilyName(): String = KotlinBundle.message("fix.change.signature.function.family")
 
         override fun invoke(
             actionContext: ActionContext, element: KtNamedFunction, elementContext: Signature, updater: ModPsiUpdater

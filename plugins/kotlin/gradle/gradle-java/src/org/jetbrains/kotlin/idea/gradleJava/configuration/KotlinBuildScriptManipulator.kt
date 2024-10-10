@@ -14,6 +14,7 @@ import com.intellij.psi.util.childrenOfType
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.idea.base.codeInsight.CliArgumentStringBuilder.buildArgumentString
 import org.jetbrains.kotlin.idea.base.codeInsight.CliArgumentStringBuilder.replaceLanguageFeature
+import org.jetbrains.kotlin.idea.base.facet.isMultiPlatformModule
 import org.jetbrains.kotlin.idea.base.util.module
 import org.jetbrains.kotlin.idea.compiler.configuration.IdeKotlinVersion
 import org.jetbrains.kotlin.idea.configuration.*
@@ -23,7 +24,6 @@ import org.jetbrains.kotlin.idea.gradleJava.configuration.utils.getCompilerOptio
 import org.jetbrains.kotlin.idea.gradleJava.configuration.utils.kotlinVersionIsEqualOrHigher
 import org.jetbrains.kotlin.idea.gradleTooling.capitalize
 import org.jetbrains.kotlin.idea.projectConfiguration.RepositoryDescription
-import org.jetbrains.kotlin.idea.util.application.isUnitTestMode
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.getChildrenOfType
 import org.jetbrains.kotlin.psi.psiUtil.startOffset
@@ -215,11 +215,20 @@ class KotlinBuildScriptManipulator(
         scope: DependencyScope,
         libraryDescriptor: ExternalLibraryDescriptor
     ) {
+        if (targetModule != null && targetModule.isMultiPlatformModule) {
+            if (addKotlinMultiplatformDependencyWithConventionSourceSets(
+                    targetModule, scope,
+                    libraryDescriptor.libraryGroupId, libraryDescriptor.libraryArtifactId,
+                    libraryDescriptor.preferredVersion ?: libraryDescriptor.maxVersion ?: libraryDescriptor.minVersion,
+                )
+            ) return
+        }
+
         val dependencyText = getCompileDependencySnippet(
             libraryDescriptor.libraryGroupId,
             libraryDescriptor.libraryArtifactId,
             libraryDescriptor.preferredVersion ?: libraryDescriptor.maxVersion ?: libraryDescriptor.minVersion,
-            scope.toGradleCompileScope(scriptFile.module?.buildSystemType == BuildSystemType.AndroidGradle)
+            scope.toGradleCompileScope(targetModule)
         )
 
         if (targetModule != null && usesNewMultiplatform()) {
@@ -324,8 +333,13 @@ class KotlinBuildScriptManipulator(
             ?.addExpressionIfMissing("(this as JavaToolchainSpec).languageVersion.set(JavaLanguageVersion.of($targetVersionNumber))")
     }
 
-    override fun changeKotlinTaskParameter(parameterName: String, parameterValue: String, forTests: Boolean): PsiElement? {
-        return scriptFile.changeKotlinTaskParameter(parameterName, parameterValue, forTests)
+    override fun changeKotlinTaskParameter(
+        parameterName: String,
+        parameterValue: String,
+        forTests: Boolean,
+        kotlinVersion: IdeKotlinVersion
+    ): PsiElement? {
+        return scriptFile.changeKotlinTaskParameter(parameterName, parameterValue, forTests, kotlinVersion)
     }
 
     private fun KtBlockExpression.addNoVersionCompileStdlibIfMissing(stdlibArtifactName: String): KtCallExpression? =
@@ -510,10 +524,10 @@ class KotlinBuildScriptManipulator(
         }?.getBlock()
     }
 
-    private fun KtScriptInitializer.getBlock(): KtBlockExpression? =
+    internal fun KtScriptInitializer.getBlock(): KtBlockExpression? =
         PsiTreeUtil.findChildOfType(this, KtCallExpression::class.java)?.getBlock()
 
-    private fun KtCallExpression.getBlock(): KtBlockExpression? =
+    internal fun KtCallExpression.getBlock(): KtBlockExpression? =
         (valueArguments.singleOrNull()?.getArgumentExpression() as? KtLambdaExpression)?.bodyExpression
             ?: lambdaArguments.lastOrNull()?.getLambdaExpression()?.bodyExpression
 
@@ -550,7 +564,7 @@ class KotlinBuildScriptManipulator(
 
     private fun KtFile.getPluginManagementBlock(): KtBlockExpression? = findScriptInitializer("pluginManagement")?.getBlock()
 
-    private fun KtFile.getKotlinBlock(): KtBlockExpression? = findOrCreateScriptInitializer("kotlin")
+    internal fun KtFile.getKotlinBlock(): KtBlockExpression? = findOrCreateScriptInitializer("kotlin")
 
     private fun KtBlockExpression.getSourceSetsBlock(): KtBlockExpression? = findOrCreateBlock("sourceSets")
 
@@ -642,15 +656,15 @@ class KotlinBuildScriptManipulator(
             parameterName,
             "listOf(\"$featureArgumentString\")",
             forTests
-        ) { replacement, insideCompilerOptions ->
+        ) { _, preserveAssignmentWhenReplacing ->
             val prefix: String
             val postfix: String
-            if (insideCompilerOptions) {
-                prefix = "$parameterName.addAll(listOf("
-                postfix = "))"
-            } else {
+            if (preserveAssignmentWhenReplacing) {
                 prefix = "$parameterName = listOf("
                 postfix = ")"
+            } else {
+                prefix = "$parameterName.addAll(listOf(" // prefix is used only when adding a new value
+                postfix = "))"
             }
             val newText = text.replaceLanguageFeature(
                 feature,
@@ -682,16 +696,13 @@ class KotlinBuildScriptManipulator(
         }?.replaceIt() ?: addExpressionIfMissing("$parameterName = \"$parameterValue\"")
     }
 
-    private fun projectSupportsCompilerOptions(file: PsiFile): Boolean {
+    private fun projectSupportsCompilerOptions(file: PsiFile, kotlinVersion: IdeKotlinVersion?): Boolean {
         /*
         // Current test infrastructure uses either a fallback version of Kotlin –
         org.jetbrains.kotlin.idea.compiler.configuration.KotlinJpsPluginSettings.Companion.getFallbackVersionForOutdatedCompiler
         or a currently bundled version. Not that one that is stated in build scripts
          */
-        if (isUnitTestMode()) {
-            return true
-        }
-        return kotlinVersionIsEqualOrHigher(major = 1, minor = 8, patch = 0, file)
+        return kotlinVersionIsEqualOrHigher(major = 1, minor = 8, patch = 0, file, kotlinVersion)
     }
 
     /**
@@ -705,7 +716,8 @@ class KotlinBuildScriptManipulator(
         parameterName: String,
         parameterValue: String,
         forTests: Boolean,
-        replaceIt: KtExpression.(/* precompiledReplacement */ String?, /* insideCompilerOptions = */ Boolean) -> PsiElement
+        kotlinVersion: IdeKotlinVersion? = null,
+        replaceIt: KtExpression.(/* precompiledReplacement */ String?, /* preserveAssignmentWhenReplacing = */ Boolean) -> PsiElement
     ): PsiElement? {
         val taskName = if (forTests) "compileTestKotlin" else "compileKotlin"
         val kotlinOptionsBlock = findScriptInitializer("$taskName.kotlinOptions")?.getBlock()
@@ -714,10 +726,10 @@ class KotlinBuildScriptManipulator(
             val assignment = kotlinOptionsBlock.statements.find {
                 (it as? KtBinaryExpression)?.left?.text == parameterName
             }
-            assignment?.replaceIt(/* precompiledReplacement = */ null, /* insideCompilerOptions = */ false)
+            assignment?.replaceIt(/* precompiledReplacement = */ null, /* preserveAssignmentWhenReplacing = */ true)
                 ?: kotlinOptionsBlock.addExpressionIfMissing("$parameterName = $parameterValue")
         } else {
-            if (projectSupportsCompilerOptions(this)) {
+            if (projectSupportsCompilerOptions(this, kotlinVersion)) {
                 addOptionToCompilerOptions(taskName, parameterName, parameterValue, replaceIt)
             } else {
                 // Add kotlinOptions
@@ -732,7 +744,7 @@ class KotlinBuildScriptManipulator(
         taskName: String,
         parameterName: String,
         parameterValue: String,
-        replaceIt: KtExpression.(/* precompiledReplacement */ String?, /* insideCompilerOptions = */ Boolean) -> PsiElement
+        replaceIt: KtExpression.(/* precompiledReplacement */ String?, /* preserveAssignmentWhenReplacing = */ Boolean) -> PsiElement
     ): PsiElement? {
         val compilerOption = getCompilerOption(parameterName, parameterValue)
         compilerOption.classToImport?.let {
@@ -755,20 +767,47 @@ class KotlinBuildScriptManipulator(
 
     private fun replaceOrAddCompilerOption(
         compilerOptionsBlock: KtBlockExpression, parameterName: String, compilerOption: CompilerOption,
-        replaceIt: KtExpression.(/* precompiledReplacement */ String?, /* insideCompilerOptions = */ Boolean) -> PsiElement
+        replaceIt: KtExpression.(/* precompiledReplacement */ String?, /* preserveAssignmentWhenReplacing = */ Boolean) -> PsiElement
     ): PsiElement {
-        val assignment = compilerOptionsBlock.statements.find {
-            (it as? KtDotQualifiedExpression)?.receiverExpression?.text == parameterName
+        var precompiledReplacement = compilerOption.expression
+        var preserveAssignmentWhenReplacing = true
+        var assignment: KtExpression? = compilerOptionsBlock.statements.find { stmt ->
+            when (stmt) {
+                is KtDotQualifiedExpression -> {
+                    preserveAssignmentWhenReplacing = false
+                    stmt.receiverExpression.text == parameterName
+                }
+
+                is KtBinaryExpression -> {
+                    if (stmt.left?.text == parameterName) {
+                        compilerOption.compilerOptionValue?.let {
+                            precompiledReplacement = "$parameterName = $it"
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                }
+
+                else -> {
+                    false
+                }
+            }
         }
         return if (assignment != null) {
-            assignment.replaceIt(/* precompiledReplacement = */ compilerOption.expression, /* insideCompilerOptions = */ true)
+            assignment.replaceIt(precompiledReplacement, preserveAssignmentWhenReplacing)
         } else {
             compilerOptionsBlock.addExpressionIfMissing(compilerOption.expression)
         }
     }
 
-    private fun KtFile.changeKotlinTaskParameter(parameterName: String, parameterValue: String, forTests: Boolean): PsiElement? {
-        return addOrReplaceKotlinTaskParameter(parameterName, "\"$parameterValue\"", forTests) { replacement, _ ->
+    private fun KtFile.changeKotlinTaskParameter(
+        parameterName: String,
+        parameterValue: String,
+        forTests: Boolean,
+        kotlinVersion: IdeKotlinVersion? = null
+    ): PsiElement? {
+        return addOrReplaceKotlinTaskParameter(parameterName, "\"$parameterValue\"", forTests, kotlinVersion) { replacement, _ ->
             if (replacement != null) {
                 replace(psiFactory.createExpression(replacement))
             } else {
@@ -859,11 +898,12 @@ class KotlinBuildScriptManipulator(
         addAfter(psiFactory.createExpression(it), after)
     }
 
-    private fun KtBlockExpression.addExpressionIfMissing(text: String, first: Boolean = false): KtExpression = addStatementIfMissing(text) {
-        psiFactory.createExpression(it).let { created ->
-            if (first) addAfter(created, null) else add(created)
+    internal fun KtBlockExpression.addExpressionIfMissing(text: String, first: Boolean = false): KtExpression =
+        addStatementIfMissing(text) {
+            psiFactory.createExpression(it).let { created ->
+                if (first) addAfter(created, null) else add(created)
+            }
         }
-    }
 
     private fun KtBlockExpression.addDeclarationIfMissing(text: String, first: Boolean = false): KtDeclaration =
         addStatementIfMissing(text) {
@@ -889,7 +929,7 @@ class KotlinBuildScriptManipulator(
     private val PsiElement.psiFactory: KtPsiFactory
         get() = KtPsiFactory(project)
 
-    private fun getCompileDependencySnippet(
+    internal fun getCompileDependencySnippet(
         groupId: String,
         artifactId: String,
         version: String?,

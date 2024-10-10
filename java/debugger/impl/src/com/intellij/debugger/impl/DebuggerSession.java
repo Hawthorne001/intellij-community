@@ -50,7 +50,7 @@ import com.intellij.xdebugger.XDebugSession;
 import com.intellij.xdebugger.XSourcePosition;
 import com.intellij.xdebugger.impl.XDebuggerManagerImpl;
 import com.intellij.xdebugger.impl.actions.XDebuggerActions;
-import com.intellij.xdebugger.impl.evaluate.quick.common.ValueLookupManager;
+import com.intellij.xdebugger.impl.evaluate.ValueLookupManagerController;
 import com.sun.jdi.ObjectCollectedException;
 import com.sun.jdi.ThreadReference;
 import com.sun.jdi.request.EventRequest;
@@ -216,7 +216,7 @@ public final class DebuggerSession implements AbstractDebuggerSession {
     myContextManager = new MyDebuggerStateManager();
     myState = new DebuggerSessionState(State.STOPPED, null);
     myDebugProcess.addDebugProcessListener(new MyDebugProcessListener(debugProcess));
-    ValueLookupManager.getInstance(getProject()).startListening();
+    ValueLookupManagerController.getInstance(getProject()).startListening();
     myDebugEnvironment = environment;
     myBaseScope = environment.getSearchScope();
     myAlternativeJre = environment.getAlternativeJre();
@@ -242,6 +242,7 @@ public final class DebuggerSession implements AbstractDebuggerSession {
     return myContextManager;
   }
 
+  @NotNull
   public Project getProject() {
     return getProcess().getProject();
   }
@@ -408,7 +409,7 @@ public final class DebuggerSession implements AbstractDebuggerSession {
   }
 
   public void pause() {
-    myDebugProcess.getManagerThread().schedule(myDebugProcess.createPauseCommand());
+    myDebugProcess.getManagerThread().schedule(myDebugProcess.createPauseCommand(null));
   }
 
   /*Presentation*/

@@ -63,8 +63,9 @@ open class IdeaFrameUI(data: ComponentData) : UiComponent(data) {
 
   fun openSettingsDialog() = driver.invokeAction("ShowSettings", now = false)
 
-  fun requestFocus() {
-    ideaFrameComponent.requestFocus()
+  fun toFront() {
+    ideaFrameComponent.toFront()
+    mainToolbar.click()
   }
 
   fun isMinimized() = ideaFrameComponent.getState() == Frame.ICONIFIED

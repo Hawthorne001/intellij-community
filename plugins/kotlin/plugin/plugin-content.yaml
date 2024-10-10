@@ -5,7 +5,7 @@
   projectLibraries:
   - name: kotlinc.kotlin-jps-plugin-classpath
     files:
-    - name: $MAVEN_REPOSITORY$/org/jetbrains/kotlin/kotlin-jps-plugin-classpath/1/kotlin-jps-plugin-classpath-1.jar
+    - name: $MAVEN_REPOSITORY$/org/jetbrains/kotlin/kotlin-jps-plugin-classpath/2/kotlin-jps-plugin-classpath-2.jar
     reason: withProjectLibrary
 - name: lib/kotlin-base-jps.jar
   modules:
@@ -32,11 +32,6 @@
   - name: kotlin.formatter.minimal
 - name: lib/kotlin-plugin.jar
   projectLibraries:
-  - name: javaslang
-    files:
-    - name: $MAVEN_REPOSITORY$/io/javaslang/javaslang/2/javaslang-2.jar
-    - name: $MAVEN_REPOSITORY$/io/javaslang/javaslang-match/2/javaslang-match-2.jar
-    reason: withProjectLibrary
   - name: javax-inject
     files:
     - name: $MAVEN_REPOSITORY$/javax/inject/javax.inject/1/javax.inject-1.jar
@@ -80,6 +75,11 @@
   - name: kotlinc.symbol-light-classes
     files:
     - name: $MAVEN_REPOSITORY$/org/jetbrains/kotlin/symbol-light-classes-for-ide/2/symbol-light-classes-for-ide-2.jar
+  - name: vavr
+    files:
+    - name: $MAVEN_REPOSITORY$/io/vavr/vavr/0/vavr-0.jar
+    - name: $MAVEN_REPOSITORY$/io/vavr/vavr-match/0/vavr-match-0.jar
+    reason: withProjectLibrary
   modules:
   - name: kotlin.plugin.common
   - name: kotlin.plugin.k1
@@ -248,7 +248,6 @@
   - name: kotlin.highlighting.k2
   - name: kotlin.uast.uast-kotlin.k2
   - name: kotlin.uast.uast-kotlin-idea.k2
-  - name: kotlin.fir.fir-low-level-api-ide-impl
   - name: kotlin.navigation
   - name: kotlin.refactorings.common
   - name: kotlin.refactorings.k2
@@ -287,6 +286,12 @@
   - name: kotlinc.compose-compiler-plugin
     files:
     - name: $MAVEN_REPOSITORY$/org/jetbrains/kotlin/compose-compiler-plugin-for-ide/2/compose-compiler-plugin-for-ide-2.jar
+    reason: withProjectLibrary
+- name: lib/kotlinc.js-plain-objects-compiler-plugin.jar
+  projectLibraries:
+  - name: kotlinc.js-plain-objects-compiler-plugin
+    files:
+    - name: $MAVEN_REPOSITORY$/org/jetbrains/kotlin/js-plain-objects-compiler-plugin-for-ide/2/js-plain-objects-compiler-plugin-for-ide-2.jar
     reason: withProjectLibrary
 - name: lib/kotlinc.kotlin-compiler-common.jar
   projectLibraries:

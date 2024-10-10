@@ -337,6 +337,14 @@
                      enabledByDefault="true"
                      level="WEAK WARNING" key="inspection.if.then.to.safe.access.display.name" bundle="messages.KotlinBundle"/>
 
+    <localInspection implementationClass="org.jetbrains.kotlin.idea.k2.codeinsight.inspections.IfThenToElvisInspection"
+                     groupPath="Kotlin"
+                     groupBundle="messages.KotlinBundle" groupKey="group.names.style.issues"
+                     enabledByDefault="true"
+                     level="WEAK WARNING"
+                     language="kotlin"
+                     key="inspection.if.then.to.elvis.display.name" bundle="messages.KotlinBundle"/>
+
     <localInspection implementationClass="org.jetbrains.kotlin.idea.k2.codeinsight.inspections.IfThenToSafeAccessInspection"
                      language="kotlin"
                      groupPath="Kotlin"
@@ -452,6 +460,15 @@
                      level="WEAK WARNING"
                      language="kotlin"
                      key="inspection.has.platform.type.display.name" bundle="messages.KotlinBundle"/>
+
+    <localInspection implementationClass="org.jetbrains.kotlin.idea.k2.codeinsight.inspections.PublicApiImplicitTypeInspection"
+                     groupPath="Kotlin"
+                     groupBundle="messages.KotlinBundle" groupKey="group.names.other.problems"
+                     enabledByDefault="false"
+                     level="WEAK WARNING"
+                     language="kotlin"
+                     key="inspection.public.api.implicit.type.display.name" bundle="messages.KotlinBundle"/>
+
 
     <localInspection implementationClass="org.jetbrains.kotlin.idea.k2.codeinsight.inspections.RedundantExplicitTypeInspection"
                      groupPath="Kotlin"

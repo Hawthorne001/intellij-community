@@ -112,9 +112,7 @@ internal object AnyThreadWriteThreadingSupport: ThreadingSupport {
     return ts.hasWrite || ts.hasWriteIntent
   }
 
-  override fun isReadAccessAllowed(): Boolean {
-    return myState.get().hasPermit
-  }
+  override fun isReadAccessAllowed(): Boolean = myState.get().hasPermit
 
   override fun executeOnPooledThread(action: Runnable, expired: BooleanSupplier): Future<*> {
     val actionDecorated = decorateRunnable(action)

@@ -1,6 +1,8 @@
 package com.intellij.notebooks.visualization.ui
 
 import com.intellij.codeInsight.hints.presentation.InlayPresentation
+import com.intellij.notebooks.visualization.UpdateContext
+import com.intellij.notebooks.visualization.ui.EditorEmbeddedComponentLayoutManager.CustomFoldingConstraint
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.editor.CustomFoldRegion
 import com.intellij.openapi.editor.CustomFoldRegionRenderer
@@ -10,15 +12,9 @@ import com.intellij.openapi.editor.impl.EditorImpl
 import com.intellij.openapi.editor.markup.GutterIconRenderer
 import com.intellij.openapi.editor.markup.TextAttributes
 import org.jetbrains.annotations.TestOnly
-import com.intellij.notebooks.visualization.UpdateContext
-import com.intellij.notebooks.visualization.ui.EditorEmbeddedComponentLayoutManager.CustomFoldingConstraint
+import java.awt.*
 import java.awt.AWTEvent.MOUSE_EVENT_MASK
 import java.awt.AWTEvent.MOUSE_MOTION_EVENT_MASK
-import java.awt.BorderLayout
-import java.awt.Dimension
-import java.awt.Graphics
-import java.awt.Graphics2D
-import java.awt.Rectangle
 import java.awt.event.MouseEvent
 import java.awt.geom.Rectangle2D
 import javax.swing.BoxLayout
@@ -29,46 +25,61 @@ class CustomFoldingEditorCellViewComponent(
   internal val component: JComponent,
   private val editor: EditorEx,
   private val cell: EditorCell,
-) : EditorCellViewComponent(), HasGutterIcon {
+) : EditorCellViewComponent() {
 
   private var foldingRegion: CustomFoldRegion? = null
 
   private var gutterActionRenderer: ActionToGutterRendererAdapter? = null
 
   private val bottomContainer = JPanel().apply {
+    isOpaque = false
     layout = BoxLayout(this, BoxLayout.Y_AXIS)
     background = EditorGutterColor.getEditorGutterBackgroundColor(editor as EditorImpl, false)
   }
-  private val mainComponent = JPanel().also {
-    it.layout = BorderLayout()
-    it.add(component, BorderLayout.CENTER)
-    it.add(bottomContainer, BorderLayout.SOUTH)
+
+  private val mainComponent = JPanel(BorderLayout()).apply {
+    isOpaque = false
+    add(component, BorderLayout.CENTER)
+    add(bottomContainer, BorderLayout.SOUTH)
   }
+
+  private val presentationToComponent = mutableMapOf<InlayPresentation, JComponent>()
 
   @TestOnly
   fun getComponentForTest(): JComponent {
     return component
   }
 
-  override fun updateGutterIcons(gutterAction: AnAction?) {
-    gutterActionRenderer = gutterAction?.let { ActionToGutterRendererAdapter(it) }
-    foldingRegion?.update()
-  }
-
-  override fun doDispose() {
-    disposeFolding()
-  }
-
-  private fun disposeFolding() = cell.manager.update { ctx ->
-    if (!editor.isDisposed && foldingRegion?.isValid == true) {
-      foldingRegion?.let {
-        ctx.addFoldingOperation {
-          editor.foldingModel.removeFoldRegion(it)
-        }
+  private fun updateGutterIcons(gutterAction: AnAction?) {
+    cell.manager.update { ctx ->
+      gutterActionRenderer = gutterAction?.let { ActionToGutterRendererAdapter(it) }
+      ctx.addFoldingOperation { modelEx ->
+        foldingRegion?.update()
       }
     }
+  }
+
+  init {
+    cell.gutterAction.afterChange(this) { action ->
+      updateGutterIcons(action)
+    }
+    updateGutterIcons(cell.gutterAction.get())
+  }
+
+  override fun dispose() = cell.manager.update { ctx ->
+    disposeFolding(ctx)
+  }
+
+  private fun disposeFolding(ctx: UpdateContext) {
+    ctx.addFoldingOperation {
+      foldingRegion?.let { region ->
+        if (region.isValid == true) {
+          editor.foldingModel.removeFoldRegion(region)
+        }
+      }
+      foldingRegion = null
+    }
     editor.componentContainer.remove(mainComponent)
-    foldingRegion = null
   }
 
   override fun calculateBounds(): Rectangle {
@@ -102,8 +113,6 @@ class CustomFoldingEditorCellViewComponent(
     }
   }
 
-  private val presentationToComponent = mutableMapOf<InlayPresentation, JComponent>()
-
   override fun addInlayBelow(presentation: InlayPresentation) {
     val inlayComponent = object : JComponent() {
 
@@ -123,13 +132,13 @@ class CustomFoldingEditorCellViewComponent(
       }
 
       override fun processMouseMotionEvent(e: MouseEvent) {
-        when(e.id) {
+        when (e.id) {
           MouseEvent.MOUSE_MOVED -> presentation.mouseMoved(e, e.point)
         }
       }
 
       override fun processMouseEvent(e: MouseEvent) {
-        when(e.id) {
+        when (e.id) {
           MouseEvent.MOUSE_EXITED -> presentation.mouseExited()
           MouseEvent.MOUSE_CLICKED -> presentation.mouseClicked(e, e.point)
           MouseEvent.MOUSE_PRESSED -> presentation.mousePressed(e, e.point)

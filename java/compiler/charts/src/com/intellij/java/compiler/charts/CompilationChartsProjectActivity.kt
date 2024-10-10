@@ -24,6 +24,7 @@ class CompilationChartsProjectActivity : ProjectActivity {
   companion object {
     private val LOG: Logger = Logger.getInstance(CompilationChartsProjectActivity::class.java)
     const val COMPILATION_CHARTS_KEY: String = "compilation.charts"
+    const val COMPILATION_CHARTS_MAGNIFICATION_KEY: String = "compilation.charts.mac.magnificationGesture"
     const val COMPILATION_STATISTIC_BUILDER_ID: String = "jps.compile.statistic"
     const val COMPILATION_STATUS_BUILDER_ID: String = "jps.compile.status"
   }
@@ -44,11 +45,16 @@ class CompilationChartsProjectActivity : ProjectActivity {
           val title = event.buildDescriptor.title.lowercase()
           if (title.contains("up-to-date") || title.startsWith("worksheet")) return@BuildProgressListener
 
-          CompilationChartsBuildEvent(project, view, buildId).also { chartEvent ->
+          CompilationChartsBuildEvent(project, view, buildId, disposable).also { chartEvent ->
             handler.addState(chartEvent)
           }
         }
-        is FinishBuildEvent -> handler.removeState()
+        is FinishBuildEvent -> {
+          val title = event.message.lowercase()
+          if (title.contains("up-to-date") || title.startsWith("worksheet")) return@BuildProgressListener
+
+          handler.removeState()
+        }
       }
     }, disposable)
   }

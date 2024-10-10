@@ -322,7 +322,7 @@ public final class XFramesView extends XDebugView {
     }
   }
 
-  public JComponent getDefaultFocusedComponent() {
+  public XDebuggerFramesList getFramesList() {
     return myFramesList;
   }
 
@@ -409,8 +409,10 @@ public final class XFramesView extends XDebugView {
 
     if (event == SessionEvent.BEFORE_RESUME) {
       if (DebuggerUIUtil.freezePaintingToReduceFlickering(myFramesList.getParent())) {
-        myScrollPane.getHorizontalScrollBar().setValue(0);
-        myScrollPane.getVerticalScrollBar().setValue(0);
+        ApplicationManager.getApplication().invokeAndWait(() -> {
+          myScrollPane.getHorizontalScrollBar().setValue(0);
+          myScrollPane.getVerticalScrollBar().setValue(0);
+        });
       }
       return;
     }
@@ -770,6 +772,10 @@ public final class XFramesView extends XDebugView {
     @Override
     public @Nullable Color getBackgroundColor() {
       return null;
+    }
+
+    public List<XStackFrame> getHiddenFrames() {
+      return hiddenFrames;
     }
 
     private Optional<ItemWithSeparatorAbove> findFrameWithSeparator() {

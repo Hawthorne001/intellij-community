@@ -2,6 +2,7 @@
 package fleet.preferences
 
 import java.io.IOException
+import java.io.UncheckedIOException
 import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Path
@@ -62,13 +63,17 @@ object FleetFromSourcesPaths {
   private fun findRepositoryRoot(): Path? {
     var directory: Path? = findFleetRootByClass()
     while (directory != null) {
-      try {
-        val children = Files.list(directory).use { it.map(Path::name).collect(Collectors.toSet()) }
-        if (children.contains(".idea") && children.contains("fleet")) {
-          return directory
+      if (directory.name != "community") {
+        try {
+          val children = Files.list(directory).use { it.map(Path::name).collect(Collectors.toSet()) }
+          if (children.contains(".idea") && children.contains("fleet")) {
+            return directory
+          }
         }
-      }
-      catch (ignore: IOException) {
+        catch (ignore: IOException) {
+        }
+        catch (ignore: UncheckedIOException) {
+        }
       }
       directory = directory.parent
     }

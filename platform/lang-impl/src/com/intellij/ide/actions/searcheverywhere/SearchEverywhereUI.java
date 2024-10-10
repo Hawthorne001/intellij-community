@@ -205,14 +205,9 @@ public final class SearchEverywhereUI extends BigPopupUI implements UiDataProvid
 
     myMlService = SearchEverywhereMlService.getInstance();
 
-    if (Experiments.getInstance().isFeatureEnabled("search.everywhere.mixed.results")) {
-      myListFactory =
-        (myMlService != null && !myMlService.getShouldAllTabPrioritizeRecentFiles()) ?
-        new MixedListFactory(true) : new MixedListFactory();
-    }
-    else {
-      myListFactory = new GroupedListFactory();
-    }
+    myListFactory = Experiments.getInstance().isFeatureEnabled("search.everywhere.mixed.results")
+                    ? new MixedListFactory()
+                    : new GroupedListFactory();
 
     if (myMlService != null) {
       myMlService.onSessionStarted(myProject, new SearchEverywhereMixedListInfo(myListFactory));
@@ -1089,25 +1084,25 @@ public final class SearchEverywhereUI extends BigPopupUI implements UiDataProvid
           return new UsageInfo(psiElement);
         }
 
-        StructureViewBuilder structureViewBuilder = LanguageStructureViewBuilder.getInstance().getStructureViewBuilder(psiFile);
-        if (!(structureViewBuilder instanceof TreeBasedStructureViewBuilder)) return new UsageInfo(psiElement);
+        for (@NotNull final var finder : SearchEverywherePreviewPrimaryUsageFinder.EP_NAME.getExtensionList()) {
+          final var resultPair = finder.findPrimaryUsageInfo(psiFile);
+          if (resultPair != null) {
+            final var usageInfo = resultPair.getFirst();
+            final var disposable = resultPair.getSecond();
 
-        @NotNull StructureViewModel structureViewModel =
-          ((TreeBasedStructureViewBuilder)structureViewBuilder).createStructureViewModel(null);
-        myUsagePreviewDisposableList.add(new Disposable() {
-          @Override
-          public void dispose() {
-            Disposer.dispose(structureViewModel);
+            if (disposable != null) {
+              myUsagePreviewDisposableList.add(new Disposable() {
+                @Override
+                public void dispose() {
+                  Disposer.dispose(disposable);
+                }
+              });
+            }
+
+            return usageInfo;
           }
-        });
-
-        TreeElement firstChild = ContainerUtil.getFirstItem(Arrays.stream(structureViewModel.getRoot().getChildren()).toList());
-        if (!(firstChild instanceof StructureViewTreeElement)) return new UsageInfo(psiFile);
-
-        Object firstChildElement = ((StructureViewTreeElement)firstChild).getValue();
-        if (!(firstChildElement instanceof PsiElement)) return new UsageInfo(psiFile);
-
-        return new UsageInfo((PsiElement)firstChildElement);
+        }
+        return new UsageInfo(psiFile);
       }
     }.queue();
   }
@@ -1460,19 +1455,29 @@ public final class SearchEverywhereUI extends BigPopupUI implements UiDataProvid
   }
 
   @TestOnly
-  public Future<List<Object>> findElementsForPattern(String pattern) {
+  private <T> Future<List<Object>> findElementsForPatternMapping(String pattern, Function<Object, T> mapper) {
     clearResults();
     CompletableFuture<List<Object>> future = new CompletableFuture<>();
     SearchAdapter listener = new SearchAdapter() {
       @Override
       public void searchFinished(@NotNull List<Object> items) {
-        future.complete(items);
+        future.complete(ContainerUtil.map(items, it -> mapper.apply(it)));
         SwingUtilities.invokeLater(() -> removeSearchListener(this));
       }
     };
     addSearchListener(listener);
     mySearchField.setText(pattern);
     return future;
+  }
+
+  @TestOnly
+  public Future<List<Object>> findElementsForPattern(String pattern) {
+    return findElementsForPatternMapping(pattern, it -> it);
+  }
+
+  @TestOnly
+  public Future<List<Object>> findPsiElementsForPattern(String pattern) {
+    return findElementsForPatternMapping(pattern, it -> toPsi(it));
   }
 
   @TestOnly

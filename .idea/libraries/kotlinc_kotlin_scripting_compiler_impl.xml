@@ -1,18 +1,18 @@
 <component name="libraryTable">
   <library name="kotlinc.kotlin-scripting-compiler-impl" type="repository">
-    <properties include-transitive-deps="false" maven-id="org.jetbrains.kotlin:kotlin-scripting-compiler-impl:2.1.0-dev-6359">
+    <properties include-transitive-deps="false" maven-id="org.jetbrains.kotlin:kotlin-scripting-compiler-impl:2.1.20-dev-941">
       <verification>
-        <artifact url="file://$MAVEN_REPOSITORY$/org/jetbrains/kotlin/kotlin-scripting-compiler-impl/2.1.0-dev-6359/kotlin-scripting-compiler-impl-2.1.0-dev-6359.jar">
-          <sha256sum>4901a8f7e625624587e0b174e48c30c7a4ad9bcea5c5510525d74a91094644c4</sha256sum>
+        <artifact url="file://$MAVEN_REPOSITORY$/org/jetbrains/kotlin/kotlin-scripting-compiler-impl/2.1.20-dev-941/kotlin-scripting-compiler-impl-2.1.20-dev-941.jar">
+          <sha256sum>18b49cbd55fb726bf9f00ece2cdddae64db7120e6c644b3a57e07161849e0b6e</sha256sum>
         </artifact>
       </verification>
     </properties>
     <CLASSES>
-      <root url="jar://$MAVEN_REPOSITORY$/org/jetbrains/kotlin/kotlin-scripting-compiler-impl/2.1.0-dev-6359/kotlin-scripting-compiler-impl-2.1.0-dev-6359.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/org/jetbrains/kotlin/kotlin-scripting-compiler-impl/2.1.20-dev-941/kotlin-scripting-compiler-impl-2.1.20-dev-941.jar!/" />
     </CLASSES>
     <JAVADOC />
     <SOURCES>
-      <root url="jar://$MAVEN_REPOSITORY$/org/jetbrains/kotlin/kotlin-scripting-compiler-impl/2.1.0-dev-6359/kotlin-scripting-compiler-impl-2.1.0-dev-6359-sources.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/org/jetbrains/kotlin/kotlin-scripting-compiler-impl/2.1.20-dev-941/kotlin-scripting-compiler-impl-2.1.20-dev-941-sources.jar!/" />
     </SOURCES>
   </library>
 </component>

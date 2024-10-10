@@ -2,6 +2,7 @@
 package com.intellij.java.compiler.charts
 
 import com.intellij.java.compiler.charts.CompilationChartsViewModel.Modules.EventKey
+import com.intellij.openapi.Disposable
 import com.jetbrains.rd.framework.impl.RdList
 import com.jetbrains.rd.framework.impl.RdMap
 import com.jetbrains.rd.framework.impl.RdProperty
@@ -11,15 +12,14 @@ import kotlinx.collections.immutable.PersistentList
 import kotlinx.collections.immutable.persistentListOf
 import java.util.concurrent.ConcurrentHashMap
 import java.util.function.Predicate
+import kotlin.math.roundToLong
 
-class CompilationChartsViewModel(val lifetime: Lifetime) {
+
+class CompilationChartsViewModel(val lifetime: Lifetime, val disposable: Disposable) {
   val modules: Modules = Modules(Long.MAX_VALUE, 0, RdMap())
   val statistics: Statistics = Statistics()
   val cpuMemory: RdProperty<CpuMemoryStatisticsType> = RdProperty(CpuMemoryStatisticsType.MEMORY)
   val filter: RdProperty<Filter> = RdProperty(Filter())
-  val scrollToEndEvent: RdProperty<ScrollToEndEvent> = RdProperty(ScrollToEndEvent())
-
-  fun requestScrollToEnd() = scrollToEndEvent.set(ScrollToEndEvent())
 
   fun started(values: List<StartTarget>) {
     values.forEach { value ->
@@ -38,7 +38,13 @@ class CompilationChartsViewModel(val lifetime: Lifetime) {
     if (statistics.start > value.time) statistics.start = value.time
     if (statistics.end < value.time) statistics.end = value.time
 
-    statistics.cpu.add(StatisticData(value.time, value.cpu))
+    if (value.cpu > 0) {
+      statistics.cpu.add(StatisticData(value.time, value.cpu))
+    } else {
+      val lastElement = statistics.cpu.lastOrNull()?.data ?: 0L
+      statistics.cpu.add(StatisticData(value.time, calculateNewLastCpuValue(lastElement)))
+    }
+
     statistics.memoryMax.add(StatisticData(value.time, value.heapMax))
     statistics.memoryUsed.add(StatisticData(value.time, value.heapUsed))
   }
@@ -104,8 +110,6 @@ class CompilationChartsViewModel(val lifetime: Lifetime) {
     }
   }
 
-  class ScrollToEndEvent
-
   enum class CpuMemoryStatisticsType {
     CPU {
       override fun max(statistics: Statistics): Long = 100
@@ -115,5 +119,14 @@ class CompilationChartsViewModel(val lifetime: Lifetime) {
     };
 
     abstract fun max(statistics: Statistics): Long
+  }
+
+  companion object {
+    private fun calculateNewLastCpuValue(value: Long): Long = when (value) {
+      in 50..100 -> (value / 1.02).roundToLong()
+      in 25 until 50 -> (value / 1.03).roundToLong()
+      in 15 until 25 -> (value / 1.04).roundToLong()
+      else -> (value / 2)
+    }
   }
 }

@@ -44,10 +44,7 @@ import com.intellij.openapi.editor.impl.stickyLines.VisualStickyLines;
 import com.intellij.openapi.editor.impl.stickyLines.ui.StickyLineShadowPainter;
 import com.intellij.openapi.editor.impl.stickyLines.ui.StickyLinesPanel;
 import com.intellij.openapi.editor.impl.view.EditorView;
-import com.intellij.openapi.editor.markup.GutterDraggableObject;
-import com.intellij.openapi.editor.markup.GutterIconRenderer;
-import com.intellij.openapi.editor.markup.RangeHighlighter;
-import com.intellij.openapi.editor.markup.TextAttributes;
+import com.intellij.openapi.editor.markup.*;
 import com.intellij.openapi.editor.state.ObservableStateListener;
 import com.intellij.openapi.editor.toolbar.floating.EditorFloatingToolbar;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
@@ -231,7 +228,7 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
   private @NotNull EditorColorsScheme myScheme;
   private final @NotNull SelectionModelImpl mySelectionModel;
   private final @NotNull EditorMarkupModelImpl myMarkupModel;
-  private final @NotNull EditorFilteringMarkupModelEx myDocumentMarkupModel;
+  private final @NotNull EditorFilteringMarkupModelEx myEditorFilteringMarkupModel;
   private final @NotNull MarkupModelListener myMarkupModelListener;
   private final @NotNull List<HighlighterListener> myHighlighterListeners = ContainerUtil.createLockFreeCopyOnWriteList();
 
@@ -273,7 +270,7 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
   private int mySavedCaretOffsetForDNDUndoHack;
   private final List<FocusChangeListener> myFocusListeners = ContainerUtil.createLockFreeCopyOnWriteList();
 
-  private InputMethodRequestsHolder myInputMethodRequestsHolder;
+  private EditorInputMethodSupport myInputMethodSupport;
   private final MouseDragSelectionEventHandler mouseDragHandler = new MouseDragSelectionEventHandler(e -> {
     processMouseDragged(e);
     return Unit.INSTANCE;
@@ -386,7 +383,7 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
 
     mySelectionModel = new SelectionModelImpl(this);
     myMarkupModel = new EditorMarkupModelImpl(this);
-    myDocumentMarkupModel = new EditorFilteringMarkupModelEx(this, documentMarkup);
+    myEditorFilteringMarkupModel = new EditorFilteringMarkupModelEx(this, documentMarkup);
     myFoldingModel = new FoldingModelImpl(this);
     myCaretModel = new CaretModelImpl(this);
     myScrollingModel = new ScrollingModelImpl(this);
@@ -493,7 +490,7 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
       }
     }, myCaretModel);
 
-    myDocumentMarkupModel.addMarkupModelListener(myCaretModel, myMarkupModelListener);
+    myEditorFilteringMarkupModel.addMarkupModelListener(myCaretModel, myMarkupModelListener);
     myMarkupModel.addMarkupModelListener(myCaretModel, myMarkupModelListener);
     myDocument.addDocumentListener(myFoldingModel, myCaretModel);
     myDocument.addDocumentListener(myCaretModel, myCaretModel);
@@ -978,7 +975,7 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
 
   @Override
   public @NotNull MarkupModelEx getFilteredDocumentMarkupModel() {
-    return myDocumentMarkupModel;
+    return myEditorFilteringMarkupModel;
   }
 
   @Override
@@ -1426,7 +1423,10 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
       myHighlighterDisposable = () -> document.removeDocumentListener(highlighter);
       Disposer.register(myDisposable, myHighlighterDisposable);
       highlighter.setEditor(this);
-      highlighter.setText(document.getImmutableCharSequence());
+
+      try (AccessToken ignored = SlowOperations.knownIssue("IJPL-162348")) {
+        highlighter.setText(document.getImmutableCharSequence());
+      }
       if (!(highlighter instanceof EmptyEditorHighlighter)) {
         EditorHighlighterCache.rememberEditorHighlighterForCachesOptimization(document, highlighter);
       }
@@ -2251,19 +2251,9 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
     return handler != null && handler.isComposedTextShown();
   }
 
-  /**
-   * Returns true if the default logic ({@link MyInputMethodHandler}) should handle input method events.
-   * Customize it with: (a) `{@link #setInputMethodRequests(InputMethodRequests)}` and
-   * (b) `editor.contentComponent.addInputMethodListener(inputMethodListener)`.
-   */
-  boolean isDefaultInputMethodHandler() {
-    InputMethodRequestsHolder holder = myInputMethodRequestsHolder;
-    return holder == null || holder.asMyHandler() != null;
-  }
-
   private @Nullable MyInputMethodHandler getMyInputMethodHandler() {
-    InputMethodRequestsHolder holder = myInputMethodRequestsHolder;
-    return holder != null ? holder.asMyHandler() : null;
+    EditorInputMethodSupport support = myInputMethodSupport;
+    return support != null && support.getRequests() instanceof MyInputMethodHandler handler ? handler : null;
   }
 
   @Override
@@ -3356,8 +3346,10 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
             }
           }
         };
-        myCommandProcessor.executeCommand(myProject, command, EditorBundle.message("move.cursor.command.name"),
-                                          DocCommandGroupId.noneGroupId(getDocument()), UndoConfirmationPolicy.DEFAULT, getDocument());
+        WriteIntentReadAction.run((Runnable)() ->
+          myCommandProcessor.executeCommand(myProject, command, EditorBundle.message("move.cursor.command.name"),
+                                            DocCommandGroupId.noneGroupId(getDocument()), UndoConfirmationPolicy.DEFAULT, getDocument())
+        );
       });
       myTimer.start();
     }
@@ -3730,7 +3722,7 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
     mouseSelectionStateAlarm.cancel();
     if (myMouseSelectionState != MOUSE_SELECTION_STATE_NONE) {
       if (mouseSelectionStateResetRunnable == null) {
-        mouseSelectionStateResetRunnable = () -> resetMouseSelectionState(null, null);
+        mouseSelectionStateResetRunnable = () -> WriteIntentReadAction.run((Runnable)() -> resetMouseSelectionState(null, null));
       }
       mouseSelectionStateAlarm.request(Registry.intValue("editor.mouseSelectionStateResetTimeout"),
                                        ModalityState.stateForComponent(myEditorComponent),
@@ -3751,37 +3743,19 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
     mouseSelectionStateAlarm.cancel();
   }
 
-  void replaceInputMethodText(@NotNull InputMethodEvent e) {
-    if (isReleased) return;
-    MyInputMethodHandler handler = getOrInitInputMethodRequestsHolder().asMyHandler();
-    if (handler != null) {
-      handler.replaceInputMethodText(e);
+  @RequiresEdt(generateAssertion = false)
+  @NotNull EditorInputMethodSupport getInputMethodSupport() {
+    if (myInputMethodSupport == null) {
+      MyInputMethodHandler handler = new MyInputMethodHandler();
+      myInputMethodSupport = new EditorInputMethodSupport(handler, new MyInputMethodListener(handler));
     }
-  }
-
-  void inputMethodCaretPositionChanged(@NotNull InputMethodEvent e) {
-    if (isReleased) return;
-    MyInputMethodHandler handler = getOrInitInputMethodRequestsHolder().asMyHandler();
-    if (handler != null) {
-      handler.setInputMethodCaretPosition(e);
-    }
-  }
-
-  @Nullable InputMethodRequests getInputMethodRequests() {
-    return getOrInitInputMethodRequestsHolder().myInputMethodRequestsSwingWrapper;
-  }
-
-  private @NotNull InputMethodRequestsHolder getOrInitInputMethodRequestsHolder() {
-    if (myInputMethodRequestsHolder == null) {
-      myInputMethodRequestsHolder = new InputMethodRequestsHolder(new MyInputMethodHandler());
-    }
-    return myInputMethodRequestsHolder;
+    return myInputMethodSupport;
   }
 
   @ApiStatus.Internal
   @RequiresEdt(generateAssertion = false)
-  public void setInputMethodRequests(@Nullable InputMethodRequests inputMethodRequests) {
-    myInputMethodRequestsHolder = new InputMethodRequestsHolder(inputMethodRequests);
+  public void setInputMethodSupport(@Nullable EditorInputMethodSupport inputMethodSupport) {
+    myInputMethodSupport = inputMethodSupport;
   }
 
   @Override
@@ -3841,52 +3815,84 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
   }
 
   /**
-   * @deprecated Use {@link #addHighlightingPredicate(Key, Predicate)} instead and provide an explicit equality object
+   * @deprecated Use {@link #addHighlightingPredicate(EditorHighlightingPredicate)} and {@link #removeHighlightingPredicate(EditorHighlightingPredicate)} instead.
    */
   @Deprecated
   public void setHighlightingPredicate(@Nullable Predicate<? super RangeHighlighter> filter) {
-    var wrapper = filter == null ? null : new PredicateWrapper(filter);
-    addHighlightingPredicate(PredicateWrapper.myKey, wrapper);
+    if (filter == null) {
+      removeHighlightingPredicate(PredicateWrapper.KEY);
+    }
+    else {
+      PredicateWrapper wrapper = new PredicateWrapper(filter);
+      addHighlightingPredicate(PredicateWrapper.KEY, wrapper);
+    }
   }
 
   private static class PredicateWrapper implements EditorHighlightingPredicate {
-    private static final Key<PredicateWrapper> myKey = Key.create("default-highlighting-predicate");
+    private static final Key<PredicateWrapper> KEY = Key.create("default-highlighting-predicate");
 
     private final @NotNull Predicate<? super RangeHighlighter> filter;
 
-    private PredicateWrapper(@NotNull Predicate<? super RangeHighlighter> filter) { this.filter = filter; }
+    PredicateWrapper(@NotNull Predicate<? super RangeHighlighter> filter) { this.filter = filter; }
 
     @Override
-    public boolean test(@NotNull RangeHighlighter highlighter) {
+    public boolean shouldRender(@NotNull RangeHighlighter highlighter) {
       return filter.test(highlighter);
     }
   }
 
   /**
-   * Adds a highlighting predicate to the editor markup model (or removes the existing one if null is passed).
-   * It is applied to this editor only, other editors are not affected.
+   * Adds a highlighting predicate to the editor markup model and removes a previous predicated associated with the key.
+   * The predicate is applied to this editor only, other editors are not affected.
    * <p/>
-   * The editor keeps the last added predicate with a given key. This means several predicates can co-exist at the same time.
-   * A range highlighter is shown only if all predicates accept it.
+   * A range highlighter is shown for the editor only if all predicates accept it.
    * <p/>
    *
-   * @param key only the last added predicate with a given key is preserved
-   * @param predicate predicate that checks if the editor should show a range highlighter or not. If null is passed, the previous predicate associated with key gets erased
+   * @param key       the key associated with the predicate
+   * @param predicate the predicate that checks if the editor should show a range highlighter or not.
    */
   @ApiStatus.Experimental
   @RequiresEdt
-  public <T extends EditorHighlightingPredicate> void addHighlightingPredicate(
-    @NotNull Key<T> key,
-    @Nullable T predicate
-  ) {
-    HighlighterFilter oldFilter = myHighlightingFilter.addPredicate(key, predicate);
-    if (oldFilter == null) { // nothing changed
+  public <T extends EditorHighlightingPredicate> @Nullable T addHighlightingPredicate(@NotNull Key<T> key, @NotNull T predicate) {
+    T oldPredicate = getUserData(key);
+    putUserData(key, predicate);
+    HighlighterFilter oldFilter = myHighlightingFilter.updatePredicate(predicate, oldPredicate);
+    updateRangeMarkers(oldFilter);
+    return oldPredicate;
+  }
+
+  /**
+   * Removes the highlighting predicate from the editor associated with key.
+   * It is applied to this editor only, other editors are not affected.
+   * <p/>
+   *
+   * @param key the key associated with the highlighter predicate to be removed
+   */
+  @ApiStatus.Experimental
+  @RequiresEdt
+  public <T extends EditorHighlightingPredicate> @Nullable T removeHighlightingPredicate(@NotNull Key<T> key) {
+    T predicate = getUserData(key);
+    if (predicate == null) {
+      return null;
+    }
+
+    putUserData(key, null);
+    HighlighterFilter oldFilter = myHighlightingFilter.removePredicate(predicate);
+    updateRangeMarkers(oldFilter);
+    return predicate;
+  }
+
+  @ApiStatus.Experimental
+  @RequiresEdt
+  private void updateRangeMarkers(@Nullable HighlighterFilter oldFilter) {
+    if (oldFilter == null) {
+      // nothing changed
       return;
     }
 
-    for (RangeHighlighter highlighter : myDocumentMarkupModel.getDelegate().getAllHighlighters()) {
-      boolean oldAvailable = oldFilter.test(highlighter);
-      boolean newAvailable = myHighlightingFilter.test(highlighter);
+    for (RangeHighlighter highlighter : myEditorFilteringMarkupModel.getDelegate().getAllHighlighters()) {
+      boolean oldAvailable = oldFilter.shouldRender(highlighter);
+      boolean newAvailable = myHighlightingFilter.shouldRender(highlighter);
       if (oldAvailable != newAvailable) {
         TextAttributes attributes = highlighter.getTextAttributes(getColorsScheme());
         myMarkupModelListener.attributesChanged((RangeHighlighterEx)highlighter, true,
@@ -3898,7 +3904,7 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
   }
 
   boolean isHighlighterAvailable(@NotNull RangeHighlighter highlighter) {
-    return myHighlightingFilter.test(highlighter);
+    return myHighlightingFilter.shouldRender(highlighter);
   }
 
   private boolean hasBlockInlay(@NotNull Point point) {
@@ -3907,11 +3913,11 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
   }
 
 
-  private static final class MyInputMethodHandleSwingThreadWrapper implements InputMethodRequests {
+  static final class MyInputMethodHandleSwingThreadWrapper implements InputMethodRequests {
     @NotNull
     private final InputMethodRequests myDelegate;
 
-    private MyInputMethodHandleSwingThreadWrapper(@NotNull InputMethodRequests delegate) {
+    MyInputMethodHandleSwingThreadWrapper(@NotNull InputMethodRequests delegate) {
       myDelegate = delegate;
     }
 
@@ -3956,17 +3962,25 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
     }
   }
 
-  private static final class InputMethodRequestsHolder {
-    private final @Nullable InputMethodRequests myInputMethodRequests;
-    private final @Nullable InputMethodRequests myInputMethodRequestsSwingWrapper;
+  private final class MyInputMethodListener implements InputMethodListener {
 
-    private InputMethodRequestsHolder(@Nullable InputMethodRequests imRequests) {
-      myInputMethodRequests = imRequests;
-      myInputMethodRequestsSwingWrapper = imRequests != null ? new MyInputMethodHandleSwingThreadWrapper(imRequests) : null;
+    private final MyInputMethodHandler myHandler;
+
+    private MyInputMethodListener(@NotNull MyInputMethodHandler handler) {
+      myHandler = handler;
     }
 
-    private @Nullable MyInputMethodHandler asMyHandler() {
-      return myInputMethodRequests instanceof MyInputMethodHandler handler ? handler : null;
+    @Override
+    public void inputMethodTextChanged(InputMethodEvent event) {
+      myHandler.replaceInputMethodText(event);
+      myHandler.setInputMethodCaretPosition(event);
+      event.consume();
+    }
+
+    @Override
+    public void caretPositionChanged(InputMethodEvent event) {
+      myHandler.setInputMethodCaretPosition(event);
+      event.consume();
     }
   }
 
@@ -4734,7 +4748,7 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
    */
   private void selectWordAtCaret(boolean honorCamelCase) {
     Caret caret = getCaretModel().getCurrentCaret();
-    try (AccessToken ignore = SlowOperations.allowSlowOperations(SlowOperations.ACTION_PERFORM)) {
+    try (AccessToken ignore = SlowOperations.startSection(SlowOperations.ACTION_PERFORM)) {
       caret.selectWordAtCaret(honorCamelCase);
     }
     setMouseSelectionState(MOUSE_SELECTION_STATE_WORD_SELECTED);
@@ -5960,7 +5974,7 @@ public final class EditorImpl extends UserDataHolderBase implements EditorEx, Hi
 
   private @Nullable StickyLinesManager createStickyLinesPanel() {
     if (myProject != null && myKind == EditorKind.MAIN_EDITOR && !isMirrored()) {
-      StickyLinesModel stickyModel = StickyLinesModel.getModel(myDocumentMarkupModel.getDelegate());
+      StickyLinesModel stickyModel = StickyLinesModel.getModel(myEditorFilteringMarkupModel.getDelegate());
       VisualStickyLines visualStickyLines = new VisualStickyLines(this, stickyModel);
       StickyLineShadowPainter shadowPainter = new StickyLineShadowPainter();
       StickyLinesPanel stickyPanel = new StickyLinesPanel(this, shadowPainter, visualStickyLines);

@@ -14,9 +14,13 @@ import com.intellij.openapi.util.Computable
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.use
-import com.intellij.platform.eel.EelExecApi
-import com.intellij.platform.eel.EelPlatform
-import com.intellij.platform.ijent.*
+import com.intellij.platform.eel.*
+import com.intellij.platform.eel.EelExecApi.ExecuteProcessError
+import com.intellij.platform.eel.provider.EelProcessResultImpl
+import com.intellij.platform.ijent.IjentExecApi
+import com.intellij.platform.ijent.IjentPosixApi
+import com.intellij.platform.ijent.IjentProcessInfo
+import com.intellij.platform.ijent.IjentTunnelsPosixApi
 import com.intellij.platform.ijent.fs.IjentFileSystemPosixApi
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.TestDisposable
@@ -497,7 +501,7 @@ class WSLDistributionTest {
         val err = shouldThrow<ProcessNotCreatedException> {
           sourceCommandLine.createProcess()
         }
-        err.message should be(executeResultMock.message)
+        err.message should be(executeResultMock.error.message)
       }
       adapter
     }
@@ -506,11 +510,13 @@ class WSLDistributionTest {
 enum class WslTestStrategy { Legacy, Ijent }
 
 private class MockIjentApi(private val adapter: GeneralCommandLine, val rootUser: Boolean) : IjentPosixApi {
-  override val platform: EelPlatform get() = throw UnsupportedOperationException()
+  override val platform: EelPlatform.Posix get() = throw UnsupportedOperationException()
 
   override val isRunning: Boolean get() = true
 
-  override val info: IjentPosixInfo get() = throw UnsupportedOperationException()
+  override val ijentProcessInfo: IjentProcessInfo get() = throw UnsupportedOperationException()
+
+  override val userInfo: EelUserPosixInfo get() = throw UnsupportedOperationException()
 
   override fun close(): Unit = Unit
 
@@ -524,49 +530,26 @@ private class MockIjentApi(private val adapter: GeneralCommandLine, val rootUser
 }
 
 private class MockIjentExecApi(private val adapter: GeneralCommandLine, private val rootUser: Boolean) : IjentExecApi {
-  override fun executeProcessBuilder(exe: String): EelExecApi.ExecuteProcessBuilder =
-    MockIjentApiExecuteProcessBuilder(adapter.apply { exePath = exe }, rootUser)
+
+
+  override suspend fun execute(builder: EelExecApi.ExecuteProcessBuilder): EelResult<EelProcess, ExecuteProcessError> = executeResultMock.also {
+    adapter.exePath = builder.exe
+    if (rootUser) {
+      adapter.putUserData(TEST_ROOT_USER_SET, true)
+    }
+    adapter.addParameters(builder.args)
+    adapter.setWorkDirectory(builder.workingDirectory)
+    adapter.environment.putAll(builder.env)
+  }
 
   override suspend fun fetchLoginShellEnvVariables(): Map<String, String> = mapOf("SHELL" to TEST_SHELL)
 }
 
 private val TEST_ROOT_USER_SET by lazy { Key.create<Boolean>("TEST_ROOT_USER_SET") }
 
-private class MockIjentApiExecuteProcessBuilder(
-  private val adapter: GeneralCommandLine,
-  rootUser: Boolean,
-) : EelExecApi.ExecuteProcessBuilder {
-  init {
-    if (rootUser) {
-      adapter.putUserData(TEST_ROOT_USER_SET, true)
-    }
-  }
-
-  override fun args(args: List<String>): EelExecApi.ExecuteProcessBuilder = apply {
-    adapter.parametersList.run {
-      clearAll()
-      addAll(args)
-    }
-  }
-
-  override fun env(env: Map<String, String>): EelExecApi.ExecuteProcessBuilder = apply {
-    adapter.environment.run {
-      clear()
-      putAll(env)
-    }
-  }
-
-  override fun pty(pty: EelExecApi.Pty?): EelExecApi.ExecuteProcessBuilder = this
-
-  override fun workingDirectory(workingDirectory: String?): EelExecApi.ExecuteProcessBuilder = apply {
-    adapter.setWorkDirectory(workingDirectory)
-  }
-
-  override suspend fun execute(): EelExecApi.ExecuteProcessResult = executeResultMock
-}
 
 private val executeResultMock by lazy {
-  EelExecApi.ExecuteProcessResult.Failure(errno = 12345, message = "mock result ${Ksuid.generate()}")
+  EelProcessResultImpl.createErrorResult(errno = 12345, message = "mock result ${Ksuid.generate()}")
 }
 
 private class WslTestStrategyExtension

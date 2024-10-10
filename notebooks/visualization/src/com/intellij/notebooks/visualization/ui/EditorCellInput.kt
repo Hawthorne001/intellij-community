@@ -1,12 +1,10 @@
 package com.intellij.notebooks.visualization.ui
 
-import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.editor.impl.EditorImpl
 import com.intellij.notebooks.ui.visualization.NotebookEditorAppearanceUtils.isOrdinaryNotebookEditor
 import com.intellij.notebooks.ui.visualization.notebookAppearance
 import com.intellij.notebooks.visualization.NotebookCellInlayController
 import com.intellij.notebooks.visualization.NotebookCellLines
-import com.intellij.notebooks.visualization.UpdateContext
+import com.intellij.openapi.editor.impl.EditorImpl
 import java.awt.Rectangle
 
 class EditorCellInput(
@@ -18,27 +16,25 @@ class EditorCellInput(
   val interval: NotebookCellLines.Interval
     get() = cell.intervalPointer.get() ?: error("Invalid interval")
 
-  private val shouldShowRunButton =
-    editor.isOrdinaryNotebookEditor() &&
-    editor.notebookAppearance.shouldShowRunButtonInGutter() &&
-    cell.type == NotebookCellLines.CellType.CODE
-
   val runCellButton: EditorCellRunGutterButton? =
-    if (shouldShowRunButton) EditorCellRunGutterButton(editor, cell)
+    if (shouldShowRunButton()) EditorCellRunGutterButton(editor, cell)
     else null
 
   val component: EditorCellViewComponent = componentFactory.createComponent(editor, cell).also { add(it) }
 
   val folding = EditorCellFoldingBar(editor, ::getFoldingBounds) { toggleFolding() }
 
-  private var gutterAction: AnAction? = null
-
   var folded = false
     private set
 
+  private fun shouldShowRunButton(): Boolean {
+    return editor.isOrdinaryNotebookEditor() &&
+           editor.notebookAppearance.shouldShowRunButtonInGutter() &&
+           cell.type == NotebookCellLines.CellType.CODE
+  }
+
   private fun getFoldingBounds(): Pair<Int, Int> {
     //For disposed
-    cell
     if (cell.intervalPointer.get() == null) {
       return Pair(0, 0)
     }
@@ -59,22 +55,13 @@ class EditorCellInput(
     (component as? InputComponent)?.updateFolding(ctx, folded)
   }
 
-  override fun doDispose() {
+  override fun dispose() {
+    super.dispose()
     folding.dispose()
   }
 
   fun update() {
     updateInput()
-    updateGutterIcons()
-  }
-
-  private fun updateGutterIcons() {
-    (component as? HasGutterIcon)?.updateGutterIcons(gutterAction)
-  }
-
-  fun setGutterAction(action: AnAction?) {
-    gutterAction = action
-    updateGutterIcons()
   }
 
   override fun calculateBounds(): Rectangle {
@@ -93,14 +80,6 @@ class EditorCellInput(
 
   fun updateInput() = cell.manager.update { ctx ->
     (component as? InputComponent)?.updateInput(ctx)
-  }
-
-  fun switchToEditMode(ctx: UpdateContext) {
-    (component as? InputComponent)?.switchToEditMode(ctx)
-  }
-
-  fun switchToCommandMode(ctx: UpdateContext) {
-    (component as? InputComponent)?.switchToCommandMode(ctx)
   }
 
   fun requestCaret() {

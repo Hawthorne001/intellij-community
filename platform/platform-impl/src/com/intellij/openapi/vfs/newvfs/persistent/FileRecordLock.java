@@ -4,90 +4,120 @@ package com.intellij.openapi.vfs.newvfs.persistent;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
 
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.LockSupport;
+import java.util.concurrent.locks.StampedLock;
 
 /**
- * Lock for protecting access to file records (identified by integer fileId)
- * Attempt to lock ID that is already locked made the current thread waiting until that ID is unlocked.
+ * Lock used to protect file-record accesses in {@link FSRecordsImpl}
+ * <p>
+ * Basically, it is a segmented read-write lock ({@link StampedLock}), with an additional 'lock for hierarchy update'
+ * locking mode ({@link #lockForHierarchyUpdate(int)}).
+ * This is not a generally applicable lock by any means: it is very much tailored for the specific needs of {@link FSRecordsImpl}.
+ * <p>
+ * The lock is <b>NOT reentrant</b> (because {@link StampedLock} is not reentrant), and an attempt to lock already locked fileId
+ * down the stack <b>leads to deadlock</b> -- so one needs to be quite careful to use this lock.
+ * 'Lock for hierarchy update' mode is also not reentrant.
+ *
+ * @see StampedLock
  */
-final class FileRecordLock {
+class FileRecordLock {
+  private static final int SEGMENTS_COUNT = 16;
+  private static final int SEGMENTS_MASK = 0b1111;
 
-  //Ideally, each fileId should have its own lock, but this is too expensive, so we use segmented lock
+  private final Segment[] segments = new Segment[SEGMENTS_COUNT];
 
-  //TODO RC: Currently we use FileRecordLock for updating file hierarchy -- which is relatively long process, since it
-  //         involves children modification. Which is why 'ReentrantLock with fileId list per segment' approach was used --
-  //         it allows to keep particular fileId locked for some time, without locking other fileIds, even those falling
-  //         into the same segment.
-  //         In bright future, we should use per-file-record locks for almost every file-record modification involving >1 field.
-  //         This is _required_ for correctness in multithreaded env -- we are currently able to bypass that requirement
-  //         only because usually there are some locks acquired upper the stack, and VFS implicitly piggyback on that.
-  //         Such per-file-record locks are most of the time short, and most of the time for-read. For that kind of locking
-  //         segmented StampedLock seems much more suitable -- the contention is low by itself (because most locks are short)
-  //         and segmentation makes it even lower, so keeping list of fileIds is not needed -- we could just lock the whole
-  //         segment.
-
-  private final SegmentLock[] segments;
-
-  FileRecordLock() {
-    this(16);
-  }
-
-  FileRecordLock(int segmentsCount) {
-    segments = new SegmentLock[segmentsCount];
-    for (int i = 0; i < segments.length; i++) {
-      segments[i] = new SegmentLock();
+  {
+    for (int i = 0; i < SEGMENTS_COUNT; i++) {
+      segments[i] = new Segment();
     }
   }
 
-  public void lock(int id) {
-    int index = toIndex(id);
-    segments[index].lock(id);
+  public long lockForWrite(int fileId) {
+    StampedLock lock = segmentFor(fileId);
+    return lock.writeLock();
   }
 
-  public void unlock(int id) {
-    int index = toIndex(id);
-    segments[index].unlock(id);
+  public void unlockForWrite(int fileId,
+                             long stamp) {
+    StampedLock lock = segmentFor(fileId);
+    lock.unlockWrite(stamp);
   }
 
-  private int toIndex(int id) {
-    return id % segments.length;
+  public long lockForRead(int fileId) {
+    StampedLock lock = segmentFor(fileId);
+    return lock.readLock();
   }
 
-  private static class SegmentLock {
-    private final ReentrantLock lock = new ReentrantLock();
-    private final Condition unlockCondition = lock.newCondition();
-    private final IntSet lockedIds = new IntOpenHashSet();
+  public void unlockForRead(int fileId, long stamp) {
+    StampedLock lock = segmentFor(fileId);
+    lock.unlockRead(stamp);
+  }
 
-    public void lock(int id) {
-      lock.lock();
-      try {
-        while (lockedIds.contains(id)) {
-          unlockCondition.awaitUninterruptibly();
+  public StampedLock lockFor(int fileId) {
+    return segmentFor(fileId);
+  }
+
+  /**
+   * Locks fileId for "hierarchy update": any attempt to lock same fileId for hierarchy update will be blocked until fileId is
+   * released with {@link #unlockForHierarchyUpdate(int)} call.
+   * <p>
+   * 'Hierarchy update' locking mode is independent of regular read/write locking: i.e. fileId locked for hierarchy update is not
+   * locked for read or write, and could be locked for read/write independently.
+   * <p>
+   * Hierarchy update lock is NOT reentrant: an attempt to lock the same fileId for hierarchy update down the stack in the same
+   * thread lead to deadlock.
+   */
+  public void lockForHierarchyUpdate(int fileId) {
+    segmentFor(fileId).lockHierarchy(fileId);
+  }
+
+  public void unlockForHierarchyUpdate(int fileId) {
+    segmentFor(fileId).unlockHierarchy(fileId);
+  }
+
+
+  private Segment segmentFor(int fileId) {
+    return segments[fileId & SEGMENTS_MASK];
+  }
+
+  private static class Segment extends StampedLock {
+
+    /** Set of fileId for which hierarchy updates are now ongoing, so those id are 'locked' for hierarchy updates now */
+    private final IntSet hierarchyUpdatesInProcess = new IntOpenHashSet();
+
+    public void lockHierarchy(int id) {
+      for (int turn = 0; ; turn++) {
+        long lockStamp = writeLock();
+        try {
+          if (!hierarchyUpdatesInProcess.contains(id)) {
+            hierarchyUpdatesInProcess.add(id);
+            return;
+          }
+
+          //use active spinning, since stamped lock doesn't support Condition to await()/signal() on:
+          if (turn < 64) {
+            Thread.onSpinWait();
+          }
+          else {
+            LockSupport.parkNanos(1000);
+          }
         }
-        lockedIds.add(id);
-      }
-      finally {
-        lock.unlock();
+        finally {
+          unlockWrite(lockStamp);
+        }
       }
     }
 
-    public void unlock(int id) {
-      lock.lock();
+    public void unlockHierarchy(int id) {
+      long lockStamp = writeLock();
       try {
-        boolean actuallyRemoved = lockedIds.remove(id);
-        if (actuallyRemoved) {
-          //This wakes up all threads waiting -- i.e. lockedIds.size() -- we assume it is usually just a few of them.
-          // But there could be pathological scenarios there a lot of threads waiting: and each thread will need to
-          // re-acquire lock, check lockedIds.contains() -- and all threads but one return to waiting after the check.
-          unlockCondition.signalAll();
-        }
-        else {
-          throw new IllegalStateException("Trying to unlock(" + id + ") which is not currently locked " + lockedIds);
+        boolean actuallyRemoved = hierarchyUpdatesInProcess.remove(id);
+        if (!actuallyRemoved) {
+          throw new IllegalStateException("Trying to unlock(" + id + ") which is not currently locked " + hierarchyUpdatesInProcess);
         }
       }
       finally {
-        lock.unlock();
+        unlockWrite(lockStamp);
       }
     }
   }
