@@ -860,6 +860,7 @@ platform/kernel/pasta
 platform/kernel/rpc
 platform/kernel/rpc.backend
 platform/kernel/rpc.lite
+platform/kernel/rpc.tests
 platform/kernel/shared
 platform/lang-api
 platform/lang-core
@@ -1413,6 +1414,7 @@ plugins/kotlin/base/scripting/scripting.scratch.definition
 plugins/kotlin/base/statistics
 plugins/kotlin/base/testFramework
 plugins/kotlin/base/util
+plugins/kotlin/build-tools-runtime
 plugins/kotlin/bundled-compiler-plugins-support
 plugins/kotlin/code-insight/api
 plugins/kotlin/code-insight/descriptions
