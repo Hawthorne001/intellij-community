@@ -88,25 +88,34 @@ def _runtime_jvm_flags(name, jvm_flags, platform_prefix, config_path, system_pat
     })
 
 _DEV_MAIN_CLASS = "org.jetbrains.intellij.build.devServer.DevMainKt"
-_PREBUILT_DEV_MAIN_CLASS = "org.jetbrains.intellij.build.devServer.PreBuiltDevMain"
-_BEFORE_RUN_DEV_MAIN_CLASS = "org.jetbrains.intellij.build.devServer.BeforeRunDevMain"
+_PREBUILT_DEV_MAIN_CLASS = "com.intellij.platform.bootstrap.dev.PreBuiltDevMain"
+_BEFORE_RUN_DEV_MAIN_CLASS = "com.intellij.platform.bootstrap.dev.BeforeRunDevMain"
+
+# `PreBuiltDevMain` and `BeforeRunDevMain`. The module carries no build scripts.
+_LAUNCHER_MODULE = "@community//platform/bootstrap/dev"
+
+# `DevMainKt` and `JUnitDevMainKt`, which assemble the product in process with the build scripts.
+_LEGACY_LAUNCHER_MODULE = "@community//platform/bootstrap/dev-legacy"
 
 def _before_run_launch(main_class, before_run_main_class, before_run_runtime_deps):
     """How a launcher starts: `main_class` directly, or `BeforeRunDevMain` over `before_run_main_class` and then `main_class`.
 
-    `BeforeRunDevMain` starts `DevMainKt` unless `-Dintellij.build.dev.server.main.class` names another launcher, so
-    only a launcher that is not `DevMainKt` passes the property.
+    `DevMainKt` comes from the legacy module, and every other launcher from the launcher module. `BeforeRunDevMain`
+    comes from the launcher module and starts the class `-Dintellij.build.dev.server.main.class` names.
     """
-    runtime_deps = ["@community//platform/bootstrap/dev"]
+    main_class_module = _LEGACY_LAUNCHER_MODULE if main_class == _DEV_MAIN_CLASS else _LAUNCHER_MODULE
     if not before_run_main_class:
-        return struct(main_class = main_class, runtime_deps = runtime_deps, jvm_flags = [])
-    jvm_flags = ["-Dintellij.build.dev.server.before.run.main.class=" + before_run_main_class]
-    if main_class != _DEV_MAIN_CLASS:
-        jvm_flags.append("-Dintellij.build.dev.server.main.class=" + main_class)
+        return struct(main_class = main_class, runtime_deps = [main_class_module], jvm_flags = [])
+    runtime_deps = [_LAUNCHER_MODULE]
+    if main_class_module != _LAUNCHER_MODULE:
+        runtime_deps.append(main_class_module)
     return struct(
         main_class = _BEFORE_RUN_DEV_MAIN_CLASS,
         runtime_deps = runtime_deps + before_run_runtime_deps,
-        jvm_flags = jvm_flags,
+        jvm_flags = [
+            "-Dintellij.build.dev.server.before.run.main.class=" + before_run_main_class,
+            "-Dintellij.build.dev.server.main.class=" + main_class,
+        ],
     )
 
 def intellij_dev_binary(
@@ -351,7 +360,7 @@ def intellij_dev_test(
         tags = [],
         add_opens = [],
         main_class = "org.jetbrains.intellij.build.devServer.JUnitDevMainKt",
-        main_class_module = "@community//platform/bootstrap/dev"):
+        main_class_module = _LEGACY_LAUNCHER_MODULE):
     """Tests inside a dev build of a product, with production class loaders: the Bazel form of a `unitTesting.runners`
     entry in the root `intellij.yaml`.
 

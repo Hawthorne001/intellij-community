@@ -1485,6 +1485,7 @@
       <module fileurl="file://$PROJECT_DIR$/platform/bootstrap/intellij.platform.bootstrap.iml" filepath="$PROJECT_DIR$/platform/bootstrap/intellij.platform.bootstrap.iml" />
       <module fileurl="file://$PROJECT_DIR$/platform/bootstrap/coroutine/intellij.platform.bootstrap.coroutine.iml" filepath="$PROJECT_DIR$/platform/bootstrap/coroutine/intellij.platform.bootstrap.coroutine.iml" />
       <module fileurl="file://$PROJECT_DIR$/platform/bootstrap/dev/intellij.platform.bootstrap.dev.iml" filepath="$PROJECT_DIR$/platform/bootstrap/dev/intellij.platform.bootstrap.dev.iml" />
+      <module fileurl="file://$PROJECT_DIR$/platform/bootstrap/dev-legacy/intellij.platform.bootstrap.dev.legacy.iml" filepath="$PROJECT_DIR$/platform/bootstrap/dev-legacy/intellij.platform.bootstrap.dev.legacy.iml" />
       <module fileurl="file://$PROJECT_DIR$/platform/buildData/intellij.platform.buildData.iml" filepath="$PROJECT_DIR$/platform/buildData/intellij.platform.buildData.iml" />
       <module fileurl="file://$PROJECT_DIR$/platform/build-scripts/intellij.platform.buildScripts.iml" filepath="$PROJECT_DIR$/platform/build-scripts/intellij.platform.buildScripts.iml" />
       <module fileurl="file://$PROJECT_DIR$/platform/build-scripts/api/intellij.platform.buildScripts.api.iml" filepath="$PROJECT_DIR$/platform/build-scripts/api/intellij.platform.buildScripts.api.iml" />

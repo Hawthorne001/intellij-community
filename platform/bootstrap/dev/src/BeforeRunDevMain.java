@@ -1,5 +1,5 @@
 // Copyright 2000-2026 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-package org.jetbrains.intellij.build.devServer;
+package com.intellij.platform.bootstrap.dev;
 
 import com.intellij.util.lang.PathClassLoader;
 import org.jetbrains.annotations.ApiStatus;
@@ -10,10 +10,8 @@ import java.net.URL;
 import java.net.URLClassLoader;
 
 /**
- * Runs the main class {@code -Dintellij.build.dev.server.before.run.main.class} names, then the launcher.
- * <p>
- * The launcher is {@code DevMainKt}, or the class {@code -Dintellij.build.dev.server.main.class} names: a split
- * distribution passes {@link PreBuiltDevMain}.
+ * Runs the main class {@code -Dintellij.build.dev.server.before.run.main.class} names, then the launcher that
+ * {@code -Dintellij.build.dev.server.main.class} names: {@link PreBuiltDevMain} or the legacy {@code DevMainKt}.
  */
 @ApiStatus.Internal
 public final class BeforeRunDevMain {
@@ -41,11 +39,12 @@ public final class BeforeRunDevMain {
 
     var mainClassName = System.getProperty(MAIN_CLASS_PROPERTY);
     if (mainClassName == null || mainClassName.isBlank()) {
-      DevMainKt.main(rawArgs);
-      return;
+      throw new IllegalStateException("System property '" + MAIN_CLASS_PROPERTY + "' is not set");
     }
-    MethodHandles.lookup()
-      .findStatic(classLoader.loadClass(mainClassName), "main", MethodType.methodType(void.class, String[].class))
+    // the legacy DevMainKt declares a package-private main in another package
+    var mainClass = classLoader.loadClass(mainClassName);
+    MethodHandles.privateLookupIn(mainClass, MethodHandles.lookup())
+      .findStatic(mainClass, "main", MethodType.methodType(void.class, String[].class))
       .invokeExact(rawArgs);
   }
 }

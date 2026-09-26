@@ -1,8 +1,8 @@
 load("@rules_jvm//:jvm.bzl", "jvm_library")
 
-### auto-generated section `build intellij.platform.bootstrap.dev` start
+### auto-generated section `build intellij.platform.bootstrap.dev.legacy` start
 jvm_library(
-    name = "dev",
+    name = "dev-legacy",
     srcs = glob(
         [
             "src/**/*.kt",
@@ -11,49 +11,42 @@ jvm_library(
         ],
         allow_empty = True,
     ),
-    module_name = "intellij.platform.bootstrap.dev",
+    module_name = "intellij.platform.bootstrap.dev.legacy",
     visibility = ["//visibility:public"],
-    runtime_deps = [
-        # do not sort,
-        "//platform/build-scripts/dev-launch",
-        "//platform/core-nio-fs",
-    ],
     deps = [
         # do not sort,
         "//libraries/jetbrains/annotations",
         "//platform/boot",
-        "//platform/devIdeConfig",
+        "//platform/build-scripts/dev-server:buildScripts-devBuildServer",
         "//platform/util-class-loader:util-classLoader",
     ],
 )
 
 jvm_library(
-    name = "dev_test_lib",
+    name = "dev-legacy_test_lib",
     testonly = True,
     srcs = glob(
         [],
         allow_empty = True,
     ),
-    module_name = "intellij.platform.bootstrap.dev",
+    module_name = "intellij.platform.bootstrap.dev.legacy",
     visibility = ["//visibility:public"],
     runtime_deps = [
         # do not sort,
-        ":dev",
+        ":dev-legacy",
         "//libraries/jetbrains/annotations:annotations_test_lib",
         "//platform/boot:boot_test_lib",
-        "//platform/build-scripts/dev-launch:dev-launch_test_lib",
-        "//platform/core-nio-fs:core-nio-fs_test_lib",
-        "//platform/devIdeConfig:devIdeConfig_test_lib",
+        "//platform/build-scripts/dev-server:buildScripts-devBuildServer_test_lib",
         "//platform/util-class-loader:util-classLoader_test_lib",
     ],
 )
-### auto-generated section `build intellij.platform.bootstrap.dev` end
+### auto-generated section `build intellij.platform.bootstrap.dev.legacy` end
 
-### auto-generated section `iml intellij.platform.bootstrap.dev` start
+### auto-generated section `iml intellij.platform.bootstrap.dev.legacy` start
 exports_files(
     [
-        "intellij.platform.bootstrap.dev.iml",
+        "intellij.platform.bootstrap.dev.legacy.iml",
     ],
     visibility = ["//visibility:public"],
 )
-### auto-generated section `iml intellij.platform.bootstrap.dev` end
+### auto-generated section `iml intellij.platform.bootstrap.dev.legacy` end

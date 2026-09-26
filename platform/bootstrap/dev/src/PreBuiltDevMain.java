@@ -1,5 +1,5 @@
 // Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-package org.jetbrains.intellij.build.devServer;
+package com.intellij.platform.bootstrap.dev;
 
 import com.intellij.platform.devIdeConfig.DevIdeConfig;
 import com.intellij.util.lang.PathClassLoader;
@@ -39,7 +39,7 @@ public final class PreBuiltDevMain {
   public static void main(String[] args) throws Throwable {
     MethodHandles.Lookup lookup = MethodHandles.lookup();
 
-    if (!(DevMainKt.class.getClassLoader() instanceof PathClassLoader classLoader)) {
+    if (!(PreBuiltDevMain.class.getClassLoader() instanceof PathClassLoader classLoader)) {
       System.err.println("The current class loader is not a com.intellij.util.lang.PathClassLoader.");
       return;
     }
