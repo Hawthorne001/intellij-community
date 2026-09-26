@@ -257,3 +257,32 @@ func TestManifestListsTheCoreClassPath(t *testing.T) {
 		t.Fatalf("coreClassPath = %q", manifest.CoreClassPath)
 	}
 }
+
+// A component declares the IDE main class only when the rule passes one. The composer takes it from the first
+// component that declares it and rejects a component that declares another.
+func TestManifestDeclaresTheMainClass(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writeText(t, "inputs/build.txt", "IU-1.0")
+	files := []sourcedFile{{Source: "inputs/build.txt", RelativePath: "build.txt"}}
+	for _, mainClass := range []string{"com.intellij.idea.Main", ""} {
+		opts := options{manifest: "component.json", kind: "platform_resources", platformPrefix: "idea", os: "linux", arch: "x64", mainClass: mainClass}
+		if err := writeManifest(opts, files, nil, nil); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(opts.manifest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var manifest componentManifest
+		if err := json.Unmarshal(data, &manifest); err != nil {
+			t.Fatal(err)
+		}
+		if mainClass == "" {
+			if manifest.MainClass != nil || !strings.Contains(string(data), `"mainClass": null`) {
+				t.Fatalf("a component without a main class declares %s", data)
+			}
+		} else if manifest.MainClass == nil || *manifest.MainClass != mainClass {
+			t.Fatalf("mainClass = %v", manifest.MainClass)
+		}
+	}
+}

@@ -565,13 +565,15 @@ _COLLECTOR_ATTRS = {
     "target_platform": attr.string(default = ""),
 } | _TRACE_SPANS_ATTR
 
-def _collect_component(ctx, files, collection_args, inputs, mnemonic, progress_message, plugin_classpath_prefix = None):
+def _collect_component(ctx, files, collection_args, inputs, mnemonic, progress_message, plugin_classpath_prefix = None, main_class = ""):
     component_manifest = ctx.actions.declare_file(ctx.label.name + ".component.json")
     args = ctx.actions.args()
     args.add("--component-manifest=" + component_manifest.path)
     args.add("--kind=" + ctx.attr.component_name)
     args.add("--platform-prefix=" + ctx.attr.platform_prefix)
     _add_target_platform_args(args, ctx.attr.target_platform)
+    if main_class:
+        args.add("--main-class=" + main_class)
 
     # The manifest is the primary output, so it is also what names the span file: `dev-dist trace` joins a span file to
     # its action by the primary output's stem, and `X.component.json`'s stem is `X.component`.
@@ -686,6 +688,7 @@ def _packed_jars_component_impl(ctx):
             mnemonic = "IntellijDevPackedJars",
             progress_message = "Naming %d packed %s jars and %d native trees for %%{label}" % (len(jars), ctx.attr.platform_prefix, len(trees)),
             plugin_classpath_prefix = ctx.file.plugin_classpath_prefix,
+            main_class = ctx.attr.main_class,
         )
 
     if not ctx.attr.files and not ctx.attr.executable_files:
@@ -718,6 +721,7 @@ def _packed_jars_component_impl(ctx):
         inputs = [metadata] + files,
         mnemonic = "IntellijDevFiles",
         progress_message = "Naming distribution files for %{label}",
+        main_class = ctx.attr.main_class,
     )
 
 intellij_dev_packed_jars_component = rule(
@@ -742,6 +746,9 @@ intellij_dev_packed_jars_component = rule(
         ),
         "core_classpath": attr.string_list(
             doc = "The `lib/`-relative packed jars of the core classpath, from the generated `DEV_DIST_CORE_CLASSPATH`. Only with `platform_payload`.",
+        ),
+        "main_class": attr.string(
+            doc = "The IDE main class the component declares, from the launch model. The `platform_resources` component states it. Empty for none.",
         ),
     },
 )
