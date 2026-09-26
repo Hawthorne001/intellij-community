@@ -36,7 +36,7 @@ import java.util.Map;
 @SuppressWarnings("UseOfSystemOutOrSystemErr")
 @ApiStatus.Internal
 public final class PreBuiltDevMain {
-  public static void main(String[] args) throws Throwable {
+  static void main(String[] args) throws Throwable {
     MethodHandles.Lookup lookup = MethodHandles.lookup();
 
     if (!(PreBuiltDevMain.class.getClassLoader() instanceof PathClassLoader classLoader)) {
