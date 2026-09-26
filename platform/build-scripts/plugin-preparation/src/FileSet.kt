@@ -8,6 +8,7 @@ import com.intellij.openapi.util.io.FileUtilRt
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.trace.Span
+import org.jetbrains.annotations.ApiStatus
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -17,7 +18,8 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.BasicFileAttributes
 import kotlin.io.path.invariantSeparatorsPathString
 
-internal fun antToRegex(pattern: String): Regex {
+@ApiStatus.Internal
+fun antToRegex(pattern: String): Regex {
   return pattern
     .let { FileUtilRt.toSystemIndependentName(it) }
     .let { FileUtil.convertAntToRegexp(it) }
