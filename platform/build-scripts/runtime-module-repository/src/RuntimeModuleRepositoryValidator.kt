@@ -1,11 +1,11 @@
 // Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-package org.jetbrains.intellij.build.impl.moduleRepository
+package com.intellij.platform.buildScripts.runtimeModuleRepository
 
 import com.intellij.platform.runtime.repository.RuntimeModuleId
 import com.intellij.platform.runtime.repository.RuntimePluginHeader
 import com.intellij.platform.runtime.repository.serialization.RawRuntimeModuleDescriptor
 
-object RuntimeModuleRepositoryValidator {
+internal object RuntimeModuleRepositoryValidator {
   interface ErrorReporter {
     fun reportError(errorMessage: String)
   }

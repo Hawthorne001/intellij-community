@@ -1,5 +1,5 @@
 // Copyright 2000-2026 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-package org.jetbrains.intellij.build.impl.moduleRepository
+package com.intellij.platform.buildScripts.runtimeModuleRepository
 
 import com.intellij.platform.runtime.repository.IncludedRuntimeModule
 import com.intellij.platform.runtime.repository.RuntimeModuleId
@@ -9,13 +9,6 @@ import com.intellij.platform.runtime.repository.RuntimeModuleLoadingRule
 import com.intellij.platform.runtime.repository.RuntimeModuleVisibility
 import com.intellij.platform.runtime.repository.impl.IncludedRuntimeModuleImpl
 import com.intellij.platform.runtime.repository.serialization.RawRuntimeModuleRepositoryData
-import com.intellij.testFramework.rules.TempDirectoryExtension
-import org.jetbrains.intellij.build.impl.ModuleItem
-import org.jetbrains.intellij.build.impl.ProjectLibraryData
-import org.jetbrains.intellij.build.impl.projectStructureMapping.DistributionFileEntry
-import org.jetbrains.intellij.build.impl.projectStructureMapping.ModuleLibraryFileEntry
-import org.jetbrains.intellij.build.impl.projectStructureMapping.ModuleOutputEntry
-import org.jetbrains.intellij.build.impl.projectStructureMapping.ProjectLibraryEntry
 import org.jetbrains.jps.model.JpsElementFactory
 import org.jetbrains.jps.model.JpsProject
 import org.jetbrains.jps.model.java.JavaSourceRootType
@@ -27,21 +20,20 @@ import org.jetbrains.jps.model.serialization.impl.JpsProjectSerializationDataExt
 import org.jetbrains.jps.util.JpsPathUtil
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.extension.RegisterExtension
+import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 
 class RuntimeModuleRepositoryGeneratorTest {
-  @JvmField
-  @RegisterExtension
-  val tempDirectory = TempDirectoryExtension()
+  @TempDir
+  lateinit var tempDirectory: Path
 
   lateinit var project: JpsProject
 
   @BeforeEach
   fun setUp() {
     project = JpsElementFactory.getInstance().createModel().project
-    project.container.setChild(JpsProjectSerializationDataExtensionImpl.ROLE, JpsProjectSerializationDataExtensionImpl(tempDirectory.rootPath.resolve("project")))
+    project.container.setChild(JpsProjectSerializationDataExtensionImpl.ROLE, JpsProjectSerializationDataExtensionImpl(tempDirectory.resolve("project")))
   }
 
   @Test
@@ -77,7 +69,7 @@ class RuntimeModuleRepositoryGeneratorTest {
     val plugin = createHeader("foo")
     val distributionEntries = listOf(
       moduleOutput("foo"),
-      moduleLibraryFileEntry("foo", "lib", tempDirectory.rootPath.resolve("lib/lib.jar"), "lib.jar"),
+      PluginDistributionEntry(PluginDistributionEntry.Kind.MODULE_LIBRARY, "foo", "lib/lib.jar", "lib.jar"),
     )
     generateAndCheck(plugin, distributionEntries) {
       descriptor(legacyJpsModule("foo"),listOf("../lib/foo.jar", "../lib/lib.jar"), emptyList())
@@ -95,7 +87,7 @@ class RuntimeModuleRepositoryGeneratorTest {
     val plugin = createHeader("foo")
     val distributionEntries = listOf(
       moduleOutput("foo"),
-      projectLibraryEntry("lib", tempDirectory.rootPath.resolve("lib/lib.jar"), "lib.jar"),
+      libraryEntry("lib/lib.jar", "lib.jar"),
     )
     generateAndCheck(plugin, distributionEntries) {
       descriptor(legacyJpsModule("foo"),listOf("../lib/foo.jar"), listOf(libId))
@@ -116,7 +108,7 @@ class RuntimeModuleRepositoryGeneratorTest {
     val distributionEntries = listOf(
       moduleOutput("foo.plugin"),
       moduleOutput("foo.core", relativeOutput = "modules/foo.core.jar"),
-      projectLibraryEntry("lib", tempDirectory.rootPath.resolve("lib/modules/foo.core.jar"), "modules/foo.core.jar"),
+      libraryEntry("lib/modules/foo.core.jar", "modules/foo.core.jar"),
     )
     generateAndCheck(plugin, distributionEntries) {
       descriptor(legacyJpsModule("foo.plugin"),listOf("../lib/foo.plugin.jar"), emptyList())
@@ -141,11 +133,11 @@ class RuntimeModuleRepositoryGeneratorTest {
     val pluginConfigurationModuleToDistributionEntries = mapOf(
       fooPlugin.pluginDescriptorJpsModuleName to listOf(
         moduleOutput("foo", pathPrefix = "plugins/foo/lib/"),
-        projectLibraryEntry("lib", tempDirectory.rootPath.resolve("plugins/foo/lib/lib.jar"), "lib.jar"),
+        libraryEntry("plugins/foo/lib/lib.jar", "lib.jar"),
       ),
       barPlugin.pluginDescriptorJpsModuleName to listOf(
         moduleOutput("bar", pathPrefix = "plugins/bar/lib/"),
-        projectLibraryEntry("lib", tempDirectory.rootPath.resolve("plugins/bar/lib/lib.jar"), "lib.jar"),
+        libraryEntry("plugins/bar/lib/lib.jar", "lib.jar"),
       ),
     )
     val libIdInFoo = RuntimeModuleId.raw("lib", "com.foo_${RuntimeModuleId.LEGACY_JPS_LIBRARY_NAMESPACE_SUFFIX}")
@@ -198,7 +190,7 @@ class RuntimeModuleRepositoryGeneratorTest {
 
   private fun generateAndCheck(
     plugin: PluginDescriptorDataForHeader,
-    distributionEntries: List<DistributionFileEntry>,
+    distributionEntries: List<PluginDistributionEntry>,
     expected: ExpectedRuntimeRepositoryBuilder.() -> Unit,
   ) {
     generateAndCheck(listOf(plugin), mapOf(plugin.pluginDescriptorJpsModuleName to distributionEntries), expected)
@@ -206,18 +198,13 @@ class RuntimeModuleRepositoryGeneratorTest {
 
   private fun generateAndCheck(
     plugins: List<PluginDescriptorDataForHeader>,
-    pluginConfigurationModuleToDistributionEntries: Map<String, List<DistributionFileEntry>>,
+    pluginConfigurationModuleToDistributionEntries: Map<String, List<PluginDistributionEntry>>,
     expected: ExpectedRuntimeRepositoryBuilder.() -> Unit,
   ) {
-    val pluginHeadersData = generateRuntimePluginHeaders(
-      plugins,
-      pluginConfigurationModuleToDistributionEntries,
-      { it: Path -> tempDirectory.rootPath.relativize(it) },
-      project
-    )
+    val pluginHeadersData = generateRuntimePluginHeaders(plugins, pluginConfigurationModuleToDistributionEntries, project)
     val descriptors = generateRuntimeModuleDescriptors(pluginHeadersData)
     val pluginHeaders = pluginHeadersData.map { it.header }
-    val runtimeModuleRepositoryData = RawRuntimeModuleRepositoryData.create(descriptors.associateBy { it.moduleId }, pluginHeaders, tempDirectory.rootPath)
+    val runtimeModuleRepositoryData = RawRuntimeModuleRepositoryData.create(descriptors.associateBy { it.moduleId }, pluginHeaders, tempDirectory)
     ExpectedRuntimeRepositoryBuilder().apply(expected).checkRuntimeModuleRepository(runtimeModuleRepositoryData)
   }
 
@@ -240,39 +227,15 @@ class RuntimeModuleRepositoryGeneratorTest {
     )
   }
 
-  private fun moduleOutput(moduleName: String, relativeOutput: String = "$moduleName.jar", pathPrefix: String = "lib/"): ModuleOutputEntry = ModuleOutputEntry(
-    tempDirectory.rootPath.resolve("$pathPrefix$relativeOutput"),
-    ModuleItem(moduleName, relativeOutputFile = relativeOutput, reason = null),
-    size = 0,
-    hash = 0,
-    relativeOutputFile = relativeOutput
-  )
-
-  private fun moduleLibraryFileEntry(moduleName: String, libraryName: String, path: Path, relativeOutputFile: String?) : DistributionFileEntry {
-    return ModuleLibraryFileEntry(
-      path = path,
-      moduleName = moduleName,
-      libraryName = libraryName,
-      relativeOutputFile = relativeOutputFile,
-      libraryFile = path,
-      canonicalLibraryPath = null,
-      size = 0,
-      hash = 0,
-      owner = null,
-    )
+  private fun moduleOutput(moduleName: String, relativeOutput: String = "$moduleName.jar", pathPrefix: String = "lib/"): PluginDistributionEntry {
+    return PluginDistributionEntry(PluginDistributionEntry.Kind.MODULE_OUTPUT, moduleName, "$pathPrefix$relativeOutput", relativeOutput)
   }
 
-  private fun projectLibraryEntry(libraryName: String, path: Path, relativeOutputFile: String?) : DistributionFileEntry {
-    return ProjectLibraryEntry(
-      path = path,
-      data = ProjectLibraryData(libraryName, reason = null, owner = null),
-      libraryFile = path,
-      canonicalLibraryPath = null,
-      size = 0,
-      hash = 0,
-      relativeOutputFile = relativeOutputFile,
-    )
+  /** A file of the project-level library `lib`. */
+  private fun libraryEntry(path: String, relativeOutputFile: String): PluginDistributionEntry {
+    return PluginDistributionEntry(PluginDistributionEntry.Kind.PROJECT_LIBRARY, "lib", path, relativeOutputFile)
   }
+
   private fun includedContentModule(moduleName: String): IncludedRuntimeModule {
     return IncludedRuntimeModuleImpl(contentModule(moduleName), RuntimeModuleLoadingRule.OPTIONAL, null)
   }
@@ -295,7 +258,7 @@ class RuntimeModuleRepositoryGeneratorTest {
   }
 
   private fun getUrl(relativePath: String): String {
-    return JpsPathUtil.pathToUrl(tempDirectory.rootPath.resolve(relativePath).absolutePathString())
+    return JpsPathUtil.pathToUrl(tempDirectory.resolve(relativePath).absolutePathString())
   }
 
   private fun contentModule(name: String): RuntimeModuleId = RuntimeModuleId.contentModule(name, DEFAULT_NAMESPACE)

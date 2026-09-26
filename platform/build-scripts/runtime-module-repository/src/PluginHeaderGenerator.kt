@@ -1,5 +1,5 @@
 // Copyright 2000-2026 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-package org.jetbrains.intellij.build.impl.moduleRepository
+package com.intellij.platform.buildScripts.runtimeModuleRepository
 
 import com.intellij.platform.runtime.repository.IncludedRuntimeModule
 import com.intellij.platform.runtime.repository.RuntimeModuleId
@@ -9,17 +9,10 @@ import com.intellij.platform.runtime.repository.RuntimePluginHeader
 import com.intellij.platform.runtime.repository.impl.IncludedRuntimeModuleImpl
 import com.intellij.platform.runtime.repository.impl.RuntimePluginHeaderImpl
 import com.intellij.util.containers.MultiMap
-import org.jetbrains.intellij.build.impl.projectStructureMapping.CustomAssetEntry
-import org.jetbrains.intellij.build.impl.projectStructureMapping.DistributionFileEntry
-import org.jetbrains.intellij.build.impl.projectStructureMapping.ModuleLibraryFileEntry
-import org.jetbrains.intellij.build.impl.projectStructureMapping.ModuleOutputEntry
-import org.jetbrains.intellij.build.impl.projectStructureMapping.ProjectLibraryEntry
 import org.jetbrains.jps.model.JpsNamedElement
 import org.jetbrains.jps.model.JpsProject
 import org.jetbrains.jps.model.library.JpsLibrary
 import org.jetbrains.jps.model.module.JpsModule
-import java.nio.file.Path
-import kotlin.io.path.invariantSeparatorsPathString
 
 /**
  * Contains information about modules and libraries included in the plugin.
@@ -49,8 +42,7 @@ internal class RuntimePluginHeaderData(
  */
 internal fun generateRuntimePluginHeaders(
   pluginDescriptorsData: List<PluginDescriptorDataForHeader>,
-  pluginConfigurationModuleToDistributionEntries: Map<String, Collection<DistributionFileEntry>>,
-  repositoryPathRelativizer: (Path) -> Path?,
+  pluginConfigurationModuleToDistributionEntries: Map<String, Collection<PluginDistributionEntry>>,
   project: JpsProject,
 ): List<RuntimePluginHeaderData> {
   val jpsElementToPlugins = pluginDescriptorsData
@@ -65,7 +57,7 @@ internal fun generateRuntimePluginHeaders(
   val (regularPluginDescriptorData, frontendOnlyPluginDescriptorData) = pluginDescriptorsData.partition { !it.additionalFrontendOnlyPlugin }
   val regularPluginHeaderData = regularPluginDescriptorData.map { pluginDescriptorsData ->
     val distributionEntries = pluginConfigurationModuleToDistributionEntries.getValue(pluginDescriptorsData.pluginDescriptorJpsModuleName)
-    generateRuntimePluginHeader(pluginDescriptorsData, distributionEntries, project, repositoryPathRelativizer, elementsIncludedInMultiplePlugins, existingIdsToReuse = emptyMap())
+    generateRuntimePluginHeader(pluginDescriptorsData, distributionEntries, project, elementsIncludedInMultiplePlugins, existingIdsToReuse = emptyMap())
   }
 
   /* generate headers for additional frontend-only plugins; these plugins don't register their own modules, they reuse modules registered by regular plugins instead;
@@ -73,27 +65,26 @@ internal fun generateRuntimePluginHeaders(
   val existingIdsToReuse = regularPluginHeaderData.fold(emptyMap<JpsNamedElement, RuntimeModuleId>()) { acc, data -> acc + data.includedElementToId }
   val frontendOnlyPluginHeaderData = frontendOnlyPluginDescriptorData.map { pluginDescriptorsData ->
     val distributionEntries = pluginConfigurationModuleToDistributionEntries.getValue(pluginDescriptorsData.pluginDescriptorJpsModuleName)
-    generateRuntimePluginHeader(pluginDescriptorsData, distributionEntries, project, repositoryPathRelativizer, elementsIncludedInMultiplePlugins, existingIdsToReuse)
+    generateRuntimePluginHeader(pluginDescriptorsData, distributionEntries, project, elementsIncludedInMultiplePlugins, existingIdsToReuse)
   }
 
   return regularPluginHeaderData + frontendOnlyPluginHeaderData
 }
 
-private fun collectJpsElementsIncludedInPlugin(distributionEntries: Collection<DistributionFileEntry>, project: JpsProject): Set<JpsNamedElement> {
+private fun collectJpsElementsIncludedInPlugin(distributionEntries: Collection<PluginDistributionEntry>, project: JpsProject): Set<JpsNamedElement> {
   return distributionEntries.mapNotNullTo(LinkedHashSet()) { entry ->
-    when (entry) {
-      is ModuleOutputEntry -> project.findModuleByName(entry.owner.moduleName)
-      is ProjectLibraryEntry -> project.libraryCollection.findLibrary(entry.data.libraryName)
-      else -> null
+    when (entry.kind) {
+      PluginDistributionEntry.Kind.MODULE_OUTPUT -> project.findModuleByName(entry.name)
+      PluginDistributionEntry.Kind.PROJECT_LIBRARY -> project.libraryCollection.findLibrary(entry.name)
+      PluginDistributionEntry.Kind.MODULE_LIBRARY -> null
     }
   }
 }
 
 private fun generateRuntimePluginHeader(
   pluginDescriptorData: PluginDescriptorDataForHeader,
-  distributionEntries: Collection<DistributionFileEntry>,
+  distributionEntries: Collection<PluginDistributionEntry>,
   project: JpsProject,
-  repositoryPathRelativizer: (Path) -> Path?,
   elementsIncludedInMultiplePlugins: Set<JpsNamedElement>,
   existingIdsToReuse: Map<JpsNamedElement, RuntimeModuleId>,
 ): RuntimePluginHeaderData {
@@ -106,12 +97,12 @@ private fun generateRuntimePluginHeader(
   val moduleLibraryPaths = MultiMap.createOrderedSet<String, String>()
   val projectLibrariesToIncludingContentModules = MultiMap.createOrderedSet<JpsLibrary, RuntimeModuleId>()
   distributionEntries.forEach { entry ->
-    val pathRelativeToDistributionDir = repositoryPathRelativizer(entry.path)?.invariantSeparatorsPathString
+    val pathRelativeToDistributionDir = entry.path
     val outputPathRelativeToPluginLibDir = entry.relativeOutputFile ?: ""
     val includedModule =
-      when (entry) {
-        is ModuleOutputEntry -> {
-          val moduleName = entry.owner.moduleName
+      when (entry.kind) {
+        PluginDistributionEntry.Kind.MODULE_OUTPUT -> {
+          val moduleName = entry.name
           val contentModuleData = pluginDescriptorData.contentModules[moduleName]
           val loadingRule = contentModuleData?.loadingRule ?: RuntimeModuleLoadingRule.EMBEDDED
           val requiredIfAvailableId = contentModuleData?.requiredIfAvailable
@@ -131,8 +122,8 @@ private fun generateRuntimePluginHeader(
             null
           }
         }
-        is ProjectLibraryEntry -> {
-          val libraryName = entry.data.libraryName
+        PluginDistributionEntry.Kind.PROJECT_LIBRARY -> {
+          val libraryName = entry.name
           val jpsLibrary = project.libraryCollection.findLibrary(libraryName) ?: error("Cannot find library by name: $libraryName")
           val containingContentModule =
             if (outputPathRelativeToPluginLibDir.startsWith("modules/")) pluginDescriptorData.contentModules[outputPathRelativeToPluginLibDir.removePrefix("modules/").removeSuffix(".jar")]
@@ -157,14 +148,13 @@ private fun generateRuntimePluginHeader(
             }
           }
         }
-        is ModuleLibraryFileEntry -> {
+        PluginDistributionEntry.Kind.MODULE_LIBRARY -> {
           if (pathRelativeToDistributionDir != null) {
-            moduleLibraryPaths.putValue(entry.moduleName, pathRelativeToDistributionDir)
+            moduleLibraryPaths.putValue(entry.name, pathRelativeToDistributionDir)
           }
           //no separate runtime modules are generated for module-level libraries; their paths are included in the descriptor corresponding to the containing module instead
           null
         }
-        is CustomAssetEntry -> null
       }
     if (includedModule != null) {
       if (shouldIncludeInPluginHeader(includedModule.moduleId, outputPathRelativeToPluginLibDir)) {
@@ -246,4 +236,9 @@ private fun createIdForJpsLibrary(library: JpsLibrary, pluginId: String, element
     if (pluginId == "com.intellij" || library !in elementsIncludedInMultiplePlugins) RuntimeModuleId.LEGACY_JPS_LIBRARY_NAMESPACE_SUFFIX
     else "${pluginId}_${RuntimeModuleId.LEGACY_JPS_LIBRARY_NAMESPACE_SUFFIX}"
   return RuntimeModuleId.raw(library.name, namespace)
+}
+
+private fun hasTestSourcesAndNoProductionSources(module: JpsModule): Boolean {
+  val sourceRoots = module.sourceRoots
+  return sourceRoots.isNotEmpty() && sourceRoots.all { it.rootType.isForTests }
 }

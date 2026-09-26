@@ -1,5 +1,5 @@
 // Copyright 2000-2026 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-package org.jetbrains.intellij.build.impl.moduleRepository
+package com.intellij.platform.buildScripts.runtimeModuleRepository
 
 import com.intellij.platform.runtime.repository.IncludedRuntimeModule
 import com.intellij.platform.runtime.repository.RuntimeModuleId
@@ -9,7 +9,7 @@ import com.intellij.platform.runtime.repository.serialization.RawRuntimeModuleDe
 import com.intellij.platform.runtime.repository.serialization.RawRuntimeModuleRepositoryData
 import org.assertj.core.api.Assertions.assertThat
 
-class ExpectedRuntimeRepositoryBuilder {
+internal class ExpectedRuntimeRepositoryBuilder {
   private val descriptors = ArrayList<RawRuntimeModuleDescriptor>()
   private val headers = ArrayList<RuntimePluginHeader>()
 

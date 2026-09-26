@@ -50,6 +50,7 @@
     <orderEntry type="module" module-name="intellij.platform.jps.build.javac.rt" />
     <orderEntry type="module" module-name="intellij.platform.jps.model.serialization" />
     <orderEntry type="module" module-name="intellij.platform.runtime.repository" />
+    <orderEntry type="module" module-name="intellij.platform.buildScripts.runtimeModuleRepository" />
     <orderEntry type="module" module-name="intellij.platform.testFramework.core" />
     <orderEntry type="module" module-name="intellij.platform.util.classLoader" />
     <orderEntry type="module" module-name="intellij.libraries.jackson3.jr.objects" />

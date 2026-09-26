@@ -1,5 +1,5 @@
 // Copyright 2000-2026 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-package org.jetbrains.intellij.build.impl.moduleRepository
+package com.intellij.platform.buildScripts.runtimeModuleRepository
 
 import com.intellij.platform.runtime.repository.RuntimeModuleId
 import com.intellij.platform.runtime.repository.RuntimeModuleId.DEFAULT_NAMESPACE
@@ -8,10 +8,9 @@ import com.intellij.platform.runtime.repository.impl.IncludedRuntimeModuleImpl
 import com.intellij.platform.runtime.repository.impl.RuntimePluginHeaderImpl
 import com.intellij.platform.runtime.repository.serialization.RawRuntimeModuleDescriptor
 import com.intellij.platform.runtime.repository.serialization.RuntimeModuleRepositorySerialization
-import com.intellij.testFramework.rules.TempDirectoryExtension
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.extension.RegisterExtension
+import org.junit.jupiter.api.io.TempDir
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.file.Files
@@ -20,9 +19,8 @@ import java.util.jar.JarFile
 import java.util.zip.ZipEntry
 
 class ModuleDescriptorsJarTest {
-  @JvmField
-  @RegisterExtension
-  val tempDirectory = TempDirectoryExtension()
+  @TempDir
+  lateinit var tempDirectory: Path
 
   private val bootstrap = RuntimeModuleId.legacyJpsModule("intellij.platform.bootstrap")
   private val util = RuntimeModuleId.legacyJpsModule("intellij.platform.util")
@@ -68,7 +66,7 @@ class ModuleDescriptorsJarTest {
   }
 
   private fun writeJar(fileName: String): Path {
-    val jar = tempDirectory.rootPath.resolve(fileName)
+    val jar = tempDirectory.resolve(fileName)
     writeModuleDescriptorsJar(descriptors, pluginHeaders, bootstrap.name, jar)
     return jar
   }
