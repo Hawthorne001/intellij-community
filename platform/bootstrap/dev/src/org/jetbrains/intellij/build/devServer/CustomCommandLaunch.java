@@ -24,7 +24,7 @@ final class CustomCommandLaunch {
 
   /**
    * The main class and the system properties of the command {@code args[0]} names, read by
-   * {@code BuildServerKt.readCustomCommandLaunch} in the distribution at {@code homePath}.
+   * {@code DevLaunchPropertiesKt.readCustomCommandLaunch} in the distribution at {@code homePath}.
    */
   static Map.Entry<String, Map<String, String>> read(MethodHandles.Lookup lookup, Class<?> buildServer, Path homePath, String[] args)
     throws Throwable {

@@ -154,14 +154,14 @@ public final class PreBuiltDevMain {
   }
 
   /**
-   * The build-server entry points in a class loader of their own, so that nothing of the build scripts stays loaded in the
-   * class loader the IDE then runs in.
+   * The launch property readers of {@code DevLaunchProperties.kt} in a class loader of their own, so that nothing of them stays
+   * loaded in the class loader the IDE then runs in.
    */
   private static Class<?> loadBuildServer(PathClassLoader classLoader) throws ClassNotFoundException {
     UrlClassLoader.Builder urlClassLoader = UrlClassLoader.build()
       .files(classLoader.getFiles())
       .parent(ClassLoader.getPlatformClassLoader());
-    return new PathClassLoader(urlClassLoader).loadClass("org.jetbrains.intellij.build.dev.BuildServerKt");
+    return new PathClassLoader(urlClassLoader).loadClass("com.intellij.platform.buildScripts.devLaunch.DevLaunchPropertiesKt");
   }
 
   private static Map<String, String> readProperties(MethodHandles.Lookup lookup, Class<?> buildServer, Path ideHomePath) throws Throwable {
