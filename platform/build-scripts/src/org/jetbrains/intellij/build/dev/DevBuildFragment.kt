@@ -62,12 +62,12 @@ data class DevBuildFragment(
   /**
    * Whether this fragment packs the jars that the inlined product descriptor ends up in.
    *
-   * A fragment that owns `lib/` by exclusion holds the application-info module - that module is not a content module,
-   * so no other producer packs its jar - and needs the descriptors inlined into it. A fragment that owns only the jars
-   * another producer packs holds none of them and does not resolve them, see
-   * [org.jetbrains.intellij.build.BuildOptions.embedProductContentModuleDescriptors]. `layoutPlatform` re-checks this
-   * conclusion against the layout it actually got, so a product that puts its application-info module in a jar this
-   * fragment does not own fails instead of shipping a descriptor with nothing inlined into it.
+   * A fragment that owns `lib/` by exclusion holds the application-info module and needs the descriptors inlined into
+   * it. The plan generator hands that jar to no other producer, also when the product declares the module as a content
+   * module. A frontend is the exception: its root descriptor is the embedded descriptor of its CWM twin, which a jar of
+   * its own carries. A fragment that owns only the jars another producer packs holds none of them and does not resolve
+   * them, see [org.jetbrains.intellij.build.BuildOptions.embedProductContentModuleDescriptors]. `layoutPlatform` fails
+   * when such a fragment packs the application-info module after all.
    */
   internal val ownsProductDescriptorJars: Boolean
     get() = platform?.mode == PlatformJarSelector.Mode.EXCLUDE
