@@ -1,11 +1,12 @@
 @file:Suppress("ReplaceGetOrSet", "ReplacePutWithAssignment")
 
-package org.jetbrains.intellij.build.devDist
+package com.intellij.platform.buildScripts.pluginModelTool
 
 import org.jetbrains.annotations.ApiStatus
 import org.jetbrains.intellij.build.JvmArchitecture
 import org.jetbrains.intellij.build.OsFamily
 import org.jetbrains.intellij.build.SignNativeFileMode
+import org.jetbrains.intellij.build.devDist.devDistSignature
 import org.jetbrains.intellij.build.impl.BaseLayout
 import org.jetbrains.intellij.build.impl.PlatformLayout
 import org.jetbrains.intellij.build.impl.PluginLayout

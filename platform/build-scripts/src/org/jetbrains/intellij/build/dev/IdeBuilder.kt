@@ -909,7 +909,7 @@ internal fun createDevBuildContext(
   )
 }
 
-internal fun createProductProperties(
+@org.jetbrains.annotations.ApiStatus.Internal fun createProductProperties(
   productConfiguration: ProductConfiguration,
   outputProvider: ModuleOutputProvider,
   projectDir: Path,

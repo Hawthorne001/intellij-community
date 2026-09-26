@@ -1,4 +1,4 @@
-package org.jetbrains.intellij.build.devDist
+package com.intellij.platform.buildScripts.pluginModelTool
 
 import com.intellij.platform.distributionContent.DistFileRow
 import com.intellij.platform.distributionContent.FileEntry

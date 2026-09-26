@@ -1,6 +1,7 @@
 // Copyright 2000-2026 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-package org.jetbrains.intellij.build.productLayout
+package com.intellij.platform.buildScripts.pluginModelTool
 
+import org.jetbrains.annotations.ApiStatus
 import java.nio.file.Path
 
 /**
@@ -73,7 +74,8 @@ private fun parseLogFilter(args: Array<String>): Set<String>? {
 /**
  * Parses command line arguments into [GeneratorRunOptions].
  */
-internal fun parseGeneratorOptions(args: Array<String>): GeneratorRunOptions {
+@ApiStatus.Internal
+fun parseGeneratorOptions(args: Array<String>): GeneratorRunOptions {
   val jsonArg = args.firstOrNull { it.startsWith("--json") }
   val updateSuppressions = args.any { it == "--update-suppressions" }
   // Report what would change and write nothing. The generate run rewrites whatever is out of sync anywhere in the

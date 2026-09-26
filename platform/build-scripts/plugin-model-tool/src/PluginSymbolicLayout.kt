@@ -1,8 +1,19 @@
 @file:Suppress("ReplaceGetOrSet", "ReplacePutWithAssignment")
 
-package org.jetbrains.intellij.build.devDist
+package com.intellij.platform.buildScripts.pluginModelTool
 
 import org.jetbrains.annotations.ApiStatus
+import org.jetbrains.intellij.build.devDist.CanonicalJarRecipe
+import org.jetbrains.intellij.build.devDist.DISTRIBUTION_ASSET_SCOPE
+import org.jetbrains.intellij.build.devDist.JarSourceRecipe
+import org.jetbrains.intellij.build.devDist.JarWriterRecipe
+import org.jetbrains.intellij.build.devDist.NATIVE_TREE_INPUT_PREFIX
+import org.jetbrains.intellij.build.devDist.PluginPackingAsset
+import org.jetbrains.intellij.build.devDist.PluginPackingPreparation
+import org.jetbrains.intellij.build.devDist.PluginPackingProjection
+import org.jetbrains.intellij.build.devDist.ReusableJarArtifact
+import org.jetbrains.intellij.build.devDist.planPluginPacking
+import org.jetbrains.intellij.build.devDist.pluginPackingExecutionVersion
 import org.jetbrains.intellij.build.impl.SupportedDistribution
 import org.jetbrains.intellij.build.impl.assembleOrderedJarSources
 

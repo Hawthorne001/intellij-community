@@ -1,10 +1,11 @@
 // Copyright 2000-2026 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 @file:Suppress("DestructuringDeclaration")
 
-package org.jetbrains.intellij.build.productLayout
+package com.intellij.platform.buildScripts.pluginModelTool
 
 import com.intellij.platform.pluginGraph.PluginGraph
 import kotlinx.serialization.json.Json
+import org.jetbrains.annotations.ApiStatus
 import org.jetbrains.intellij.build.BuildLifetime
 import org.jetbrains.intellij.build.BuildTracer
 import org.jetbrains.intellij.build.ModuleOutputProvider
@@ -12,6 +13,11 @@ import org.jetbrains.intellij.build.buildSpan
 import org.jetbrains.intellij.build.impl.BazelModuleOutputProvider
 import org.jetbrains.intellij.build.impl.JpsModuleOutputProvider
 import org.jetbrains.intellij.build.impl.bazelOutputRoot
+import org.jetbrains.intellij.build.productLayout.CommunityModuleSets
+import org.jetbrains.intellij.build.productLayout.CoreModuleSets
+import org.jetbrains.intellij.build.productLayout.LibraryModuleSets
+import org.jetbrains.intellij.build.productLayout.ModuleSet
+import org.jetbrains.intellij.build.productLayout.ProductModulesContentSpec
 import org.jetbrains.intellij.build.productLayout.discovery.GenerationResult
 import org.jetbrains.intellij.build.productLayout.discovery.ModuleSetGenerationConfig
 import org.jetbrains.intellij.build.productLayout.discovery.ModuleSetSourceLabels
@@ -19,6 +25,7 @@ import org.jetbrains.intellij.build.productLayout.discovery.discoverModuleSets
 import org.jetbrains.intellij.build.productLayout.discovery.findProductPropertiesSourceFile
 import org.jetbrains.intellij.build.productLayout.json.buildPluginGraphForJson
 import org.jetbrains.intellij.build.productLayout.json.streamModuleAnalysisJson
+import org.jetbrains.intellij.build.productLayout.setProductDslLogFilter
 import org.jetbrains.intellij.build.productLayout.stats.printGenerationSummary
 import org.jetbrains.intellij.build.productLayout.tooling.JsonFilter
 import org.jetbrains.intellij.build.productLayout.tooling.ModuleLocation
@@ -278,7 +285,8 @@ private fun jsonResponse(
  * `--json=-`, or `--json=@/path/to/query.json`.
  * Returns null for full JSON output, or JsonFilter for filtered output.
  */
-internal fun parseJsonArgument(
+@ApiStatus.Internal
+fun parseJsonArgument(
   arg: String,
   stdinReader: () -> String = { System.`in`.bufferedReader().readText() },
   fileReader: (Path) -> String = { Files.readString(it) },

@@ -1,19 +1,23 @@
 @file:Suppress("ReplaceGetOrSet", "ReplacePutWithAssignment")
 
-package org.jetbrains.intellij.build.devDist
+package com.intellij.platform.buildScripts.pluginModelTool
 
 import com.intellij.openapi.util.JDOMUtil
 import org.jdom.Element
 import org.jdom.Namespace
 import org.jetbrains.annotations.ApiStatus
 import org.jetbrains.intellij.build.PLUGIN_XML_RELATIVE_PATH
+import org.jetbrains.intellij.build.devDist.JarSourceRecipe
+import org.jetbrains.intellij.build.devDist.PluginPackingAsset
+import org.jetbrains.intellij.build.devDist.PluginPackingPreparation
+import org.jetbrains.intellij.build.devDist.isNativeTreeAsset
 import org.jetbrains.intellij.build.getLibraryFileName
 import org.jetbrains.intellij.build.impl.BUILT_IN_HELP_MODULE_NAME
 import org.jetbrains.intellij.build.impl.LibraryPackMode
 import org.jetbrains.intellij.build.impl.ModuleIncludeReasons
 import org.jetbrains.intellij.build.impl.ModuleItem
-import org.jetbrains.intellij.build.impl.contentModuleJarPath
 import org.jetbrains.intellij.build.impl.PluginLayout
+import org.jetbrains.intellij.build.impl.contentModuleJarPath
 import org.jetbrains.intellij.build.impl.getLibNameBySourceFile
 import org.jetbrains.intellij.build.impl.hasOwnModuleLibraries
 import org.jetbrains.intellij.build.impl.isAutoLayoutChild
@@ -99,7 +103,7 @@ private class SymbolicLayoutProjector(
   fun project(): PluginSymbolicLayout {
     if (!descriptors.isPluginXmlFinal &&
         (layout.hasRawPluginXmlPatcher || layout.hasPluginXmlPatcher || layout.hasCustomVersion ||
-         variant.scramble && layout.deprecatedPostProcessor.isNotEmpty() || preparationFacts.effects.containsKey("descriptor"))) {
+         variant.scramble && layout.getDeprecatedPostScrambleProcessor().isNotEmpty() || preparationFacts.effects.containsKey("descriptor"))) {
       effect("descriptor", "Descriptor callbacks require ordered inputs and the resulting descriptor facts")?.let {
         roots.addAll(it.preparation.outputs)
       }
