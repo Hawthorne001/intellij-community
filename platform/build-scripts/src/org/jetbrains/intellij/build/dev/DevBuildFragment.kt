@@ -63,16 +63,16 @@ data class DevBuildFragment(
     get() = runtimeModuleRepository
 
   /**
-   * Whether this fragment packs the jars that the inlined product descriptor ends up in.
+   * Whether this fragment can pack the jar that the inlined product descriptor ends up in.
    *
-   * A fragment that owns `lib/` by exclusion holds the application-info module and needs the descriptors inlined into
-   * it. A frontend is the exception: a jar of its own carries the root descriptor. A fragment that owns only the jars
-   * another producer packs holds none of them and does not resolve them, see
-   * [org.jetbrains.intellij.build.BuildOptions.embedProductContentModuleDescriptors]. `layoutPlatform` fails when such a
-   * fragment packs the application-info module after all.
+   * A fragment that owns `lib/` by exclusion holds the application-info module when no packing target takes its jar. The
+   * reference of the `jars` gate packs the handed-over jars, and the application-info module jar is one of them. So
+   * both need the descriptors inlined. A frontend is the exception: a jar of its own carries the root descriptor, see
+   * [org.jetbrains.intellij.build.BuildOptions.embedProductContentModuleDescriptors]. `layoutPlatform` fails when a
+   * fragment without the inlined descriptors packs the application-info module after all.
    */
   internal val ownsProductDescriptorJars: Boolean
-    get() = platform?.mode == PlatformJarSelector.Mode.EXCLUDE
+    get() = platform != null
 
   override fun toString(): String = name
 }

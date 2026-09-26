@@ -192,7 +192,7 @@ def _packer_resources(os, _inputs_size):
     """One single-threaded packer process."""
     return {"cpu": 1, "memory": 192 if os == "windows" else 96}
 
-def pack_jar(ctx, output, spans, module_jars, library_jars, merged_module_names, mnemonic, progress_message, extra_flags = [], extra_outputs = [], descriptor = None, descriptor_module = None, descriptor_path = "META-INF/plugin.xml", metadata = None, coverage_agent_manifest = False):
+def pack_jar(ctx, output, spans, module_jars, library_jars, merged_module_names, mnemonic, progress_message, extra_flags = [], extra_outputs = [], descriptor = None, descriptor_module = None, descriptor_path = "META-INF/plugin.xml", patches = [], metadata = None, coverage_agent_manifest = False):
     """Runs the packer over one jar, for either of this file's two rules and for `dev_plugin.bzl`.
 
     The rules differ in the jar's identity - its path, its mnemonic and its provider - and in nothing the packer
@@ -212,6 +212,10 @@ def pack_jar(ctx, output, spans, module_jars, library_jars, merged_module_names,
     `intellij-coverage-agent*` gets `source-manifest=coverage-agent`, which rewrites its `Boot-Class-Path` to the jar
     it ends up in. The call fails when the policy is selected and no source has that name, so a renamed agent library
     cannot ship an unrewritten manifest.
+
+    `descriptor` replaces `descriptor_path` in the output of `descriptor_module`. `patches` is a list of
+    `struct(path, file)` that replaces more entries of the same module output. Each patch is a `patch=` line before the
+    `module=` line of that module, so the packer takes the patch and not the entry of the module output.
     """
     args = ctx.actions.args()
     args.set_param_file_format("multiline")
@@ -250,9 +254,13 @@ def pack_jar(ctx, output, spans, module_jars, library_jars, merged_module_names,
     # Files, not `.path` strings, so path mapping can rewrite them. The module outputs come first and the libraries
     # after them, as `JarPackager` orders the same jar, so the module descriptor is the first entry.
     coverage_agent_sources = 0
+    patch_files = ([struct(path = descriptor_path, file = descriptor)] if descriptor != None else []) + patches
+    if patch_files and descriptor_module not in merged_module_names:
+        fail("%s: the patched module '%s' is not merged into the jar" % (ctx.label, descriptor_module))
     for module_name, module_jar in zip(merged_module_names, module_jars):
-        if descriptor != None and module_name == descriptor_module:
-            args.add(descriptor, format = "patch=" + descriptor_path + "=%s")
+        if module_name == descriptor_module:
+            for patch in patch_files:
+                args.add(patch.file, format = "patch=" + patch.path + "=%s")
         args.add(module_jar, format = "module=%s")
         if coverage_agent_manifest and module_jar.basename.startswith("intellij-coverage-agent"):
             args.add("source-manifest=coverage-agent")
@@ -272,7 +280,7 @@ def pack_jar(ctx, output, spans, module_jars, library_jars, merged_module_names,
         # One mnemonic per producer, so a strategy or an execution-info override reaches every jar of that producer and
         # of no other. `common.bazelrc` pins a pool size to each, and `no-cache` to the platform one alone.
         mnemonic = mnemonic,
-        inputs = depset(library_jars + module_jars + ([descriptor] if descriptor != None else [])),
+        inputs = depset(library_jars + module_jars + [patch.file for patch in patch_files]),
         outputs = outputs,
         executable = ctx.executable._packer,
         # One process per action, not a persistent worker: the memory of each action is freed when it exits, and
@@ -510,10 +518,26 @@ DevDistPlatformJarInfo = provider(
     },
 )
 
+def _patches(ctx, members):
+    """The `patches` attribute as `struct(path, file)` entries, and the member module they replace entries of."""
+    patches = []
+    for target, path in ctx.attr.patches.items():
+        files = target.files.to_list()
+        if len(files) != 1:
+            fail("%s provides %d files. A patch must provide one" % (target.label, len(files)), attr = "patches")
+        patches.append(struct(path = path, file = files[0]))
+    if not patches:
+        return struct(patches = [], module = None)
+    module = ctx.attr.patched_module or members[0].name
+    if module not in [member.name for member in members]:
+        fail("the patched module '%s' is not a member of the jar" % module, attr = "patched_module")
+    return struct(patches = patches, module = module)
+
 def _dev_dist_platform_jar_impl(ctx):
     members = [_module(target, "modules") for target in ctx.attr.modules]
     destination = _relative_output_file(ctx)
     libraries = _library_entries(ctx)
+    patches = _patches(ctx, members)
     output = ctx.actions.declare_file(ctx.label.name + "/" + destination)
     spans = _declare_spans(ctx, ctx.label.name)
     metadata = _pack(
@@ -527,6 +551,8 @@ def _dev_dist_platform_jar_impl(ctx):
         progress_message = "Packing the platform jar of %{label}",
         # A residual jar carries no native file: a module with a presigned library packs as a `content_module_jar`.
         extra_flags = ["merge-entities=true", "reject-native-entries=true"],
+        descriptor_module = patches.module,
+        patches = patches.patches,
     )
     return [
         DefaultInfo(files = depset([output])),
@@ -545,12 +571,20 @@ dev_dist_platform_jar = rule(
     doc = """Packs one generated residual platform jar of a dev distribution.
 
 One `PackContentModuleJar` action writes the jar at `<target>/<relative_output_file>` and its metadata. The jar holds no
-native file.""",
+native file. The application-info module jar replaces two entries of the module output with `patches`: the product
+descriptor and the stamped application info.""",
     implementation = _dev_dist_platform_jar_impl,
     attrs = {
         "relative_output_file": attr.string(mandatory = True),
         "modules": attr.label_list(providers = [_KtJvmInfo], mandatory = True),
         "libraries": attr.label_list(providers = [[JavaInfo]]),
+        "patches": attr.label_keyed_string_dict(
+            allow_files = True,
+            doc = "Files that replace entries of the module output, keyed by target and valued by the entry path.",
+        ),
+        "patched_module": attr.string(
+            doc = "The JPS name of the member whose output `patches` replaces entries of. Empty for the first member.",
+        ),
         "_packer": attr.label(default = "//platform/build-scripts/bazel-rules:content_module_packer", executable = True, cfg = "exec"),
         "_trace_spans": attr.label(default = ":trace_spans", providers = [BuildSettingInfo]),
     },

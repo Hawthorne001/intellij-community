@@ -267,8 +267,10 @@ class IdeBuilderTest {
     assertThat(options.buildDateInSeconds).isEqualTo(getDevModeOrTestBuildDateInSeconds())
   }
 
+  // The reference of the `jars` gate packs the handed-over jars. The application-info module jar is one of them, and the
+  // product descriptor in it carries the inlined content module descriptors.
   @Test
-  fun theReferenceFragmentDoesNotInlineTheProductDescriptor() {
+  fun theReferenceFragmentInlinesTheProductDescriptorBecauseItPacksTheApplicationInfoJar() {
     val options = BuildOptions()
 
     configureDevModeBuildOptions(
@@ -285,7 +287,7 @@ class IdeBuilderTest {
       buildOptionsTemplate = BuildOptions(),
     )
 
-    assertThat(options.embedProductContentModuleDescriptors).isFalse()
+    assertThat(options.embedProductContentModuleDescriptors).isTrue()
   }
 
   @Test
