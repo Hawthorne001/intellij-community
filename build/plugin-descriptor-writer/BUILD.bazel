@@ -200,8 +200,15 @@ diff_test(
     file2 = "testdata/product_descriptor/expected.xml",
 )
 
+diff_test(
+    name = "product_descriptor_prefix_rule_test",
+    file1 = ":product_descriptor.plugin-classpath-prefix",
+    file2 = "testdata/product_descriptor/plugin-classpath-prefix.expected",
+)
+
 descriptor_action_test(
     name = "product_descriptor_action_test",
+    extra_output_suffixes = [".plugin-classpath-prefix"],
     mnemonic = "DevDistProductDescriptor",
     mode = "--product-descriptor",
     target_under_test = ":product_descriptor",
@@ -240,6 +247,7 @@ test_suite(
         ":product_application_info_action_test",
         ":product_application_info_rule_test",
         ":product_descriptor_action_test",
+        ":product_descriptor_prefix_rule_test",
         ":product_descriptor_rule_test",
     ],
     visibility = ["//visibility:public"],

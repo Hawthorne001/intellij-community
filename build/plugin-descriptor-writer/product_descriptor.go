@@ -3,10 +3,12 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"strings"
 
+	"jetbrains.com/plugin-descriptor-writer/internal/descriptorxml"
 	"jetbrains.com/plugin-descriptor-writer/internal/structural"
 )
 
@@ -22,6 +24,8 @@ type productDescriptorRequest struct {
 	mainModule string
 	refused    []string
 	scrambled  map[string]bool
+	// pluginClassPathPrefix, when set, receives the prefix of `plugins/plugin-classpath.txt`.
+	pluginClassPathPrefix string
 }
 
 func runProductDescriptor(lines []string) int {
@@ -35,11 +39,48 @@ func runProductDescriptor(lines []string) int {
 		fmt.Fprintf(os.Stderr, "ERROR: could not resolve the product descriptor (module=%s): %v\n", parsed.mainModule, err)
 		return 1
 	}
-	if err := writeOutput(parsed.output, content); err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
-		return 1
+	outputs := map[string]string{parsed.output: content.text}
+	if parsed.pluginClassPathPrefix != "" {
+		prefix, err := pluginClassPathPrefix(content, parsed.mainModule)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: could not write the plugin classpath prefix (module=%s): %v\n", parsed.mainModule, err)
+			return 1
+		}
+		outputs[parsed.pluginClassPathPrefix] = prefix
+	}
+	for file, text := range outputs {
+		if err := writeOutput(file, text); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+			return 1
+		}
 	}
 	return 0
+}
+
+// pluginClassPathFormatVersion is `PLUGIN_CLASSPATH_FORMAT_VERSION` of `classpath.kt`, the first byte of
+// `plugins/plugin-classpath.txt`.
+const pluginClassPathFormatVersion = 3
+
+// pluginClassPathPrefix is `writePluginClassPathPrefix` (`classpath.kt`): the format version, the size of the product
+// descriptor as a big-endian 32-bit integer, and the product descriptor.
+//
+// The descriptor is `createCachedProductDescriptor`. It loads the product descriptor, so every embedded body becomes
+// text, and it embeds a descriptor into every `<module/>` that is still empty. So a scrambled module gets its
+// descriptor here, and no filter runs.
+func pluginClassPathPrefix(content productContent, mainModule string) (string, error) {
+	element, err := descriptorxml.Read(content.text)
+	if err != nil {
+		return "", err
+	}
+	request := structural.ContentRequest{MainModule: mainModule, Embeds: true}
+	if err := structural.EmbedContentModules(element, request, content.cache, content.resolver); err != nil {
+		return "", err
+	}
+	descriptor := descriptorxml.Write(element)
+	header := make([]byte, 5)
+	header[0] = pluginClassPathFormatVersion
+	binary.BigEndian.PutUint32(header[1:], uint32(len(descriptor)))
+	return string(header) + descriptor, nil
 }
 
 // resolveProductDescriptor is the part of `processAndGetProductPluginContentModules` (`productModuleLayout.kt`) that
@@ -48,7 +89,7 @@ func runProductDescriptor(lines []string) int {
 // The includes are resolved first. Then the content filter removes the refused modules, and every other content module
 // receives its descriptor, except a scrambled one. The product descriptor takes no `separate-jar` attribute, because
 // `processProductModule` embeds with no descriptor modifier.
-func resolveProductDescriptor(parsed productDescriptorRequest) (string, error) {
+func resolveProductDescriptor(parsed productDescriptorRequest) (productContent, error) {
 	return resolveProductContent(parsed.embeddedProductRequest, structural.ContentRequest{
 		MainModule: parsed.mainModule,
 		Refused:    parsed.refused,
@@ -76,6 +117,8 @@ func parseProductDescriptorRequest(lines []string) (productDescriptorRequest, er
 				parsed.refused = append(parsed.refused, value)
 			case "--scrambled-content-module":
 				parsed.scrambled[value] = true
+			case "--plugin-classpath-prefix":
+				parsed.pluginClassPathPrefix = value
 			default:
 				err = fmt.Errorf("unknown product descriptor option '%s'", option)
 			}

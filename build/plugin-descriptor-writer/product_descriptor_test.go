@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -46,6 +47,69 @@ func TestProductDescriptorMatchesKotlin(t *testing.T) {
 				t.Errorf("got:\n%s\nwant:\n%s", got, expected)
 			}
 		})
+	}
+}
+
+// The expected prefix descriptor is cut from the `plugin-classpath-prefix` that the Kotlin `platform_lib` fragment of
+// `PyCharmCore` wrote, in the same way as `expected.xml`. The reload turns every embedded body into escaped text.
+func TestPluginClassPathPrefixMatchesKotlin(t *testing.T) {
+	dir := t.TempDir()
+	prefix := filepath.Join(dir, "plugin-classpath-prefix")
+	arguments := append([]string{
+		"--product-descriptor", "--out=" + filepath.Join(dir, "plugin.xml"),
+		"--source=" + filepath.Join(productDescriptorTestData, "source.xml"),
+		"--main-module=intellij.pycharm.community",
+		"--refused-content-module=intellij.fixture.refused",
+		"--plugin-classpath-prefix=" + prefix,
+	}, productDescriptorInputs()...)
+	if code := run(arguments); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	content := read(t, prefix)
+	descriptor := read(t, filepath.Join(productDescriptorTestData, "prefix.expected.xml"))
+	if content[0] != pluginClassPathFormatVersion {
+		t.Errorf("the format version is %d", content[0])
+	}
+	if size := binary.BigEndian.Uint32([]byte(content[1:5])); int(size) != len(descriptor) {
+		t.Errorf("the size is %d, want %d", size, len(descriptor))
+	}
+	if got := content[5:]; got != descriptor {
+		t.Errorf("got:\n%s\nwant:\n%s", got, descriptor)
+	}
+}
+
+// The prefix embeds the descriptor of a scrambled module too, because `createCachedProductDescriptor` checks no
+// scrambling. So the request declares the descriptor of every content module.
+func TestPluginClassPathPrefixEmbedsAScrambledModule(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "source.xml")
+	prefix := filepath.Join(dir, "prefix")
+	write(t, source, `<idea-plugin><content><module name="a.b"/><module name="closed.source" loading="embedded"/></content></idea-plugin>`)
+	write(t, filepath.Join(dir, "a.b.xml"), `<idea-plugin package="a.b"/>`)
+	write(t, filepath.Join(dir, "closed.source.xml"), `<idea-plugin package="closed.source"/>`)
+	code := run([]string{
+		"--product-descriptor", "--out=" + filepath.Join(dir, "plugin.xml"), "--source=" + source, "--main-module=intellij.product",
+		"--descriptor=a.b.xml=" + filepath.Join(dir, "a.b.xml"), "--descriptor=closed.source.xml=" + filepath.Join(dir, "closed.source.xml"),
+		"--scrambled-content-module=closed.source", "--plugin-classpath-prefix=" + prefix,
+	})
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if got, want := read(t, filepath.Join(dir, "plugin.xml")), `<idea-plugin>
+  <content>
+    <module name="a.b"><![CDATA[<idea-plugin package="a.b" />]]></module>
+    <module name="closed.source" loading="embedded" />
+  </content>
+</idea-plugin>`; got != want {
+		t.Errorf("descriptor got:\n%s\nwant:\n%s", got, want)
+	}
+	if got, want := read(t, prefix)[5:], `<idea-plugin>
+  <content>
+    <module name="a.b">&lt;idea-plugin package=&quot;a.b&quot; /&gt;</module>
+    <module name="closed.source" loading="embedded"><![CDATA[<idea-plugin package="closed.source" />]]></module>
+  </content>
+</idea-plugin>`; got != want {
+		t.Errorf("prefix got:\n%s\nwant:\n%s", got, want)
 	}
 }
 

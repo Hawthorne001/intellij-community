@@ -1,6 +1,7 @@
 """Produces the two generated entries of the application-info module jar of a product from declared files.
 
-`dev_dist_product_descriptor` resolves the product descriptor, `META-INF/plugin.xml` or `META-INF/<prefix>Plugin.xml`.
+`dev_dist_product_descriptor` resolves the product descriptor, `META-INF/plugin.xml` or `META-INF/<prefix>Plugin.xml`, and
+the prefix of `plugins/plugin-classpath.txt`.
 `dev_dist_product_application_info` stamps `idea/<prefix>ApplicationInfo.xml`. The generator writes both targets into
 `//build/dev-dist-product-descriptors`, and `dev_dist_platform_jar` patches their outputs into the jar.
 """
@@ -23,10 +24,11 @@ def _dev_dist_product_descriptor_impl(ctx):
     args.add_all(declared.descriptor_jar_args, format_each = "--descriptor-in-jar=%s")
     args.add_all(ctx.attr.refused_content_modules, format_each = "--refused-content-module=%s")
     args.add_all(ctx.attr.scrambled_content_modules, format_each = "--scrambled-content-module=%s")
+    args.add(ctx.outputs.plugin_classpath_prefix, format = "--plugin-classpath-prefix=%s")
     ctx.actions.run(
         mnemonic = "DevDistProductDescriptor",
         inputs = depset([source] + declared.inputs),
-        outputs = [output],
+        outputs = [output, ctx.outputs.plugin_classpath_prefix],
         executable = ctx.executable._resolver,
         arguments = [args],
         progress_message = "Resolving the product descriptor of %{label}",
@@ -34,7 +36,11 @@ def _dev_dist_product_descriptor_impl(ctx):
     return [DefaultInfo(files = depset([output]))]
 
 _dev_dist_product_descriptor = rule(
+    doc = """Resolves the product descriptor, and writes the prefix of `plugins/plugin-classpath.txt` from it.
+
+The prefix is a predeclared output, `<name>.plugin-classpath-prefix`, so a component names it by its label.""",
     implementation = _dev_dist_product_descriptor_impl,
+    outputs = {"plugin_classpath_prefix": "%{name}.plugin-classpath-prefix"},
     attrs = {
         "source": attr.label(
             mandatory = True,

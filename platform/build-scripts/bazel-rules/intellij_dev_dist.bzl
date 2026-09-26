@@ -565,7 +565,7 @@ _COLLECTOR_ATTRS = {
     "target_platform": attr.string(default = ""),
 } | _TRACE_SPANS_ATTR
 
-def _collect_component(ctx, files, collection_args, inputs, mnemonic, progress_message):
+def _collect_component(ctx, files, collection_args, inputs, mnemonic, progress_message, plugin_classpath_prefix = None):
     component_manifest = ctx.actions.declare_file(ctx.label.name + ".component.json")
     args = ctx.actions.args()
     args.add("--component-manifest=" + component_manifest.path)
@@ -595,7 +595,7 @@ def _collect_component(ctx, files, collection_args, inputs, mnemonic, progress_m
             payload = depset(files),
             manifest = component_manifest,
             plugin_classpath_part = None,
-            plugin_classpath_prefix = None,
+            plugin_classpath_prefix = plugin_classpath_prefix,
             inputs_manifest = None,
             unused_inputs = None,
         ),
@@ -653,6 +653,8 @@ def _jar_destinations(ctx, records):
     return [by_source[source] for source in sorted(by_source.keys())]
 
 def _packed_jars_component_impl(ctx):
+    if ctx.attr.plugin_classpath_prefix and not ctx.attr.platform_payload:
+        fail("%s: plugin_classpath_prefix needs platform_payload" % ctx.label)
     if ctx.attr.platform_payload:
         if ctx.attr.files or ctx.attr.executable_files:
             fail("%s: files and executable_files cannot be combined with platform_payload" % ctx.label)
@@ -674,6 +676,7 @@ def _packed_jars_component_impl(ctx):
             inputs = [catalogue, jar_list] + [source.metadata for record in records for source in _packed_sources(record)],
             mnemonic = "IntellijDevPackedJars",
             progress_message = "Naming %d packed %s jars and %d native trees for %%{label}" % (len(jars), ctx.attr.platform_prefix, len(trees)),
+            plugin_classpath_prefix = ctx.file.plugin_classpath_prefix,
         )
 
     if not ctx.attr.files and not ctx.attr.executable_files:
@@ -724,6 +727,10 @@ intellij_dev_packed_jars_component = rule(
         ),
         "files": attr.label_keyed_string_dict(allow_files = True, doc = "Maps each source label to its distribution path. The composer copies the file as is."),
         "executable_files": attr.label_keyed_string_dict(allow_files = True, doc = "Maps each source label to its distribution path. The composer copies the file with the executable bit."),
+        "plugin_classpath_prefix": attr.label(
+            allow_single_file = True,
+            doc = "The `plugin-classpath.txt` prefix that `dev_dist_product_descriptor` writes, for a product whose `platform_lib` writes none. Only with `platform_payload`.",
+        ),
     },
 )
 
@@ -776,7 +783,7 @@ def _compose(ctx, fragment_targets):
     prefixes = [fragment.plugin_classpath_prefix for fragment in fragments if fragment.plugin_classpath_prefix]
     parts = [fragment.plugin_classpath_part for fragment in fragments if fragment.plugin_classpath_part]
     if parts and len(prefixes) != 1:
-        fail("%s: exactly one fragment must set produces_plugin_classpath_prefix, got %d" % (ctx.label, len(prefixes)))
+        fail("%s: exactly one component must provide the plugin-classpath prefix, got %d" % (ctx.label, len(prefixes)))
 
     source_bindings = None
     if not local_launch:

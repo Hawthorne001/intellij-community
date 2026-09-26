@@ -40,24 +40,32 @@ func runEmbeddedProduct(lines []string) int {
 }
 
 func resolveEmbeddedProduct(parsed embeddedProductRequest) (string, error) {
-	return resolveProductContent(parsed, structural.ContentRequest{
+	content, err := resolveProductContent(parsed, structural.ContentRequest{
 		MainModule:  parsed.source,
 		SeparateJar: parsed.separateJar,
 		Embeds:      true,
 	})
+	return content.text, err
+}
+
+// productContent is a resolved product descriptor and the descriptor cache that resolved it.
+type productContent struct {
+	text     string
+	cache    *structural.Cache
+	resolver *structural.Resolver
 }
 
 // resolveProductContent resolves the includes of a product descriptor and embeds its content modules.
 //
 // The embedded product descriptor and the product descriptor share this body. They differ only in the content request.
-func resolveProductContent(parsed embeddedProductRequest, request structural.ContentRequest) (string, error) {
+func resolveProductContent(parsed embeddedProductRequest, request structural.ContentRequest) (productContent, error) {
 	files, err := readSeed(parsed.descriptors)
 	if err != nil {
-		return "", err
+		return productContent{}, err
 	}
 	cache := structural.NewCache(nil)
 	if err := seedFromJars(cache, parsed.descriptorsInJar); err != nil {
-		return "", err
+		return productContent{}, err
 	}
 	// Kotlin merges the jar seed over the file seed when a direct request declares both.
 	for _, loadPath := range files.LoadPaths() {
@@ -67,19 +75,19 @@ func resolveProductContent(parsed embeddedProductRequest, request structural.Con
 	resolver := structural.NewResolver([]structural.Scope{{Modules: parsed.modules, Cache: cache}})
 	source, err := os.ReadFile(parsed.source)
 	if err != nil {
-		return "", err
+		return productContent{}, err
 	}
 	element, err := descriptorxml.Read(string(source))
 	if err != nil {
-		return "", err
+		return productContent{}, err
 	}
 	if err := structural.ResolveIncludes(element, resolver); err != nil {
-		return "", err
+		return productContent{}, err
 	}
 	if err := structural.EmbedContentModules(element, request, cache, resolver); err != nil {
-		return "", err
+		return productContent{}, err
 	}
-	return descriptorxml.Write(element), nil
+	return productContent{text: descriptorxml.Write(element), cache: cache, resolver: resolver}, nil
 }
 
 func parseEmbeddedProductRequest(lines []string) (embeddedProductRequest, error) {
