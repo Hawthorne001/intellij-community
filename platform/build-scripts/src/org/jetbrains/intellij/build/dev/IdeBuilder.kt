@@ -29,7 +29,6 @@ import org.jetbrains.intellij.build.ProprietaryBuildTools
 import org.jetbrains.intellij.build.ScrambleTool
 import org.jetbrains.intellij.build.SearchableOptionSetDescriptor
 import org.jetbrains.intellij.build.WindowsDistributionCustomizer
-import org.jetbrains.intellij.build.classPath.contentModuleJarCoreClasspathEntries
 import org.jetbrains.intellij.build.classPath.createCachedProductDescriptor
 import org.jetbrains.intellij.build.classPath.generateClassPathByLayoutReport
 import org.jetbrains.intellij.build.classPath.generateCoreClasspathFromPlugins
@@ -1103,18 +1102,11 @@ private fun layoutPlatform(
   val libDir = runDir.resolve("lib")
   // todo - we cannot for now skip nio-fs.jar, probably `-Xbootclasspath/a` is not correctly set for dev-mode-based tests
   val skipNioFs = if (request.isBootClassPathCorrect) isMultiRoutingFileSystemEnabledForProduct(context.productProperties.platformPrefix) else false
+  // The jars this fragment handed over are absent from `entries`, because it neither resolved nor packed them. Their
+  // component lists the ones of the core classpath itself: the plan generator decides them with
+  // `contentModuleJarCoreClasspathEntries`, and the composer joins the classpaths of all components.
   val coreClassPath = generateClassPathByLayoutReport(libDir = libDir, entries = entries, skipNioFs = skipNioFs)
-  // The jars this fragment handed over are absent from `entries` - it neither resolved nor packed them - but they are
-  // in the distribution, put there by their own component, and the classpath spans the whole distribution. Deciding
-  // this here is what lets that component be produced without a product layout at all.
-  val externallyPackedClassPath = contentModuleJarCoreClasspathEntries(
-    libDir = libDir,
-    includedModules = platformLayout.includedModules,
-    externallyPackedJars = if (selector.mode == PlatformJarSelector.Mode.EXCLUDE) selector.jars else emptySet(),
-    skipNioFs = skipNioFs,
-  )
-
-  return PlatformLayoutResult(entries, coreClassPath + externallyPackedClassPath)
+  return PlatformLayoutResult(entries, coreClassPath)
 }
 
 private fun computeAdditionalModulesFingerprint(additionalModules: List<String>): String {

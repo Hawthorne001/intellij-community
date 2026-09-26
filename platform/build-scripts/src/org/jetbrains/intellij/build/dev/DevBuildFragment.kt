@@ -103,8 +103,8 @@ data class PlatformJarSelector(
      * a path two components both provide - and must not resolve their modules either, since a declared module output is
      * what makes a source edit re-run this action.
      *
-     * The layout still knows those jars exist, which is what keeps the core classpath complete: see
-     * `contentModuleJarCoreClasspathEntries`.
+     * The component of those jars lists the ones of the core classpath, so this fragment lists only the jars it packs.
+     * The plan generator decides them with `contentModuleJarCoreClasspathEntries`.
      */
     EXCLUDE,
 

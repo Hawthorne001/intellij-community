@@ -635,26 +635,35 @@ def _metadata_catalogue(ctx, records):
     ]))
     return catalogue
 
-def _jar_destinations(ctx, records):
+def _jar_destinations(ctx, records, core_classpath = []):
     """Where each packed jar goes within the plugin's `lib/`, which its own file name states only when it is flat.
 
-    A native tree goes to `lib/<native_lib_dir>/`, as a `tree` entry. Sorted by source, so the file the action reads is
-    the same file for the same set of jars.
+    A native tree goes to `lib/<native_lib_dir>/`, as a `tree` entry. A jar of `core_classpath` is a `coreClassPath`
+    entry, and every jar that list names must be placed. Sorted by source, so the file the action reads is the same file
+    for the same set of jars.
     """
+    on_core_classpath = {jar: True for jar in core_classpath}
+    placed = {}
     by_source = {}
     for record in records:
         for source in _packed_sources(record):
             relative_path = record.native_lib_dir if source.tree else record.relative_path
             entry = {"source": source.file.path, "relativePath": relative_path} | ({"tree": True} if source.tree else {})
+            if not source.tree and relative_path in on_core_classpath:
+                entry["coreClassPath"] = True
+                placed[relative_path] = True
             previous = by_source.get(source.file.path)
             if previous != None and previous != entry:
                 fail("%s: %s is placed at both %s and %s" % (ctx.label, source.file.path, previous["relativePath"], relative_path))
             by_source[source.file.path] = entry
+    missing = [jar for jar in core_classpath if jar not in placed]
+    if missing:
+        fail("%s: the core classpath names jars that the payload does not pack: %s" % (ctx.label, ", ".join(missing)))
     return [by_source[source] for source in sorted(by_source.keys())]
 
 def _packed_jars_component_impl(ctx):
-    if ctx.attr.plugin_classpath_prefix and not ctx.attr.platform_payload:
-        fail("%s: plugin_classpath_prefix needs platform_payload" % ctx.label)
+    if (ctx.attr.plugin_classpath_prefix or ctx.attr.core_classpath) and not ctx.attr.platform_payload:
+        fail("%s: plugin_classpath_prefix and core_classpath need platform_payload" % ctx.label)
     if ctx.attr.platform_payload:
         if ctx.attr.files or ctx.attr.executable_files:
             fail("%s: files and executable_files cannot be combined with platform_payload" % ctx.label)
@@ -663,7 +672,7 @@ def _packed_jars_component_impl(ctx):
         trees = [record.native_tree for record in records if record.native_tree]
         catalogue = _metadata_catalogue(ctx, records)
         jar_list = ctx.actions.declare_file(ctx.label.name + ".jars.json")
-        ctx.actions.write(jar_list, json.encode(_jar_destinations(ctx, records)))
+        ctx.actions.write(jar_list, json.encode(_jar_destinations(ctx, records, ctx.attr.core_classpath)))
         args = ctx.actions.args()
         args.add("--metadata-catalogue=" + catalogue.path)
         args.add("--jars-file=" + jar_list.path)
@@ -730,6 +739,9 @@ intellij_dev_packed_jars_component = rule(
         "plugin_classpath_prefix": attr.label(
             allow_single_file = True,
             doc = "The `plugin-classpath.txt` prefix that `dev_dist_product_descriptor` writes, for a product whose `platform_lib` writes none. Only with `platform_payload`.",
+        ),
+        "core_classpath": attr.string_list(
+            doc = "The `lib/`-relative packed jars of the core classpath, from the generated `DEV_DIST_CORE_CLASSPATH`. Only with `platform_payload`.",
         ),
     },
 )
