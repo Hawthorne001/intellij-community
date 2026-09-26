@@ -661,7 +661,7 @@ func mergeTree(source, target string, genuineSymlinks map[string]string) (merged
 			return recreateGenuineSymlink(relativePath, destination, genuineTarget)
 		}
 		// Follow the staging link of Bazel. A copy of the link would leak the execution root into the distribution.
-		realFile, err := filepath.EvalSymlinks(file)
+		realFile, err := evalSymlinks(file)
 		if err != nil {
 			return err
 		}

@@ -78,7 +78,7 @@ func realPath(value string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.EvalSymlinks(absolute)
+	return evalSymlinks(absolute)
 }
 
 // pathStartsWith is `Path.startsWith` for two normalized paths. It compares whole name elements.

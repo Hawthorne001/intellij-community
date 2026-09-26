@@ -146,7 +146,7 @@ func (sources *componentSources) resolve(source string) (string, error) {
 		if err != nil || !info.IsDir() {
 			return "", fmt.Errorf("Declared source directory escapes its artifact binding: %s", bound.directory)
 		}
-		if real, err := filepath.EvalSymlinks(bound.directory); err != nil {
+		if real, err := evalSymlinks(bound.directory); err != nil {
 			return "", err
 		} else if real != bound.directory {
 			return "", fmt.Errorf("Declared source directory escapes its artifact binding: %s", bound.directory)
@@ -155,7 +155,7 @@ func (sources *componentSources) resolve(source string) (string, error) {
 			return "", fmt.Errorf("Declared source member has an escaping directory alias: %s", source)
 		}
 		parent := filepath.Dir(bound.path)
-		if real, err := filepath.EvalSymlinks(parent); err != nil {
+		if real, err := evalSymlinks(parent); err != nil {
 			return "", err
 		} else if real != parent || !pathStartsWith(parent, bound.directory) {
 			return "", fmt.Errorf("Declared source member has an escaping directory alias: %s", source)
@@ -175,7 +175,7 @@ func (sources *componentSources) resolve(source string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	boundReal, err := filepath.EvalSymlinks(bound.path)
+	boundReal, err := evalSymlinks(bound.path)
 	if err != nil {
 		return "", err
 	}

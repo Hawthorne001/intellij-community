@@ -11,6 +11,8 @@ go_binary(
         "main.go",
         "manifest.go",
         "paths.go",
+        "realpath_other.go",
+        "realpath_windows.go",
         "spec.go",
     ],
     gc_linkopts = [
@@ -44,6 +46,8 @@ go_test(
         "manifest.go",
         "paths.go",
         "paths_test.go",
+        "realpath_other.go",
+        "realpath_windows.go",
         "spec.go",
         "spec_test.go",
     ],
