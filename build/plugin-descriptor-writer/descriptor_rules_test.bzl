@@ -23,7 +23,7 @@ descriptor_action_test = analysistest.make(
         "mnemonic": attr.string(mandatory = True),
         "mode": attr.string(mandatory = True),
         "_writer": attr.label(
-            default = "//build/plugin-descriptor-writer",
+            default = "//platform/build-scripts/bazel-rules:plugin_descriptor_writer",
             executable = True,
             cfg = "exec",
         ),

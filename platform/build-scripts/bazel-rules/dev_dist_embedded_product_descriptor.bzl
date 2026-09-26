@@ -82,7 +82,7 @@ _dev_dist_embedded_product_descriptor = rule(
             doc = "Content modules whose embedded descriptor takes separate-jar=true.",
         ),
         "_resolver": attr.label(
-            default = "//build/plugin-descriptor-writer",
+            default = "//platform/build-scripts/bazel-rules:plugin_descriptor_writer",
             executable = True,
             cfg = "exec",
         ),

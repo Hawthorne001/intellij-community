@@ -235,7 +235,7 @@ def _assembler_resources(_os, _inputs):
 # A private label attribute read through `BuildSettingInfo` rather than a `select()` on a public one, so the value is
 # read once in the implementation and the two branches sit next to each other: declare the file and name it on the
 # command line, or do neither. The label is written bare and resolves in the repository this `.bzl` belongs to - the
-# same thing `content_module_jar.bzl` relies on for its `_packer = "//build/content-module-packer"` - so an ultimate
+# same thing `content_module_jar.bzl` relies on for its `_packer` default - so an ultimate
 # build reaches `@community//platform/build-scripts/bazel-rules:trace_spans` without this file naming a repository.
 _TRACE_SPANS_ATTR = {
     "_trace_spans": attr.label(
