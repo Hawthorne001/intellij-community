@@ -267,36 +267,20 @@ internal fun buildProduct(request: BuildRequest, createBuildContext: (buildDir: 
 
       val platformResourcesJob = if (request.fragment.platformResources) {
         fork("layout platform resources") {
-          // Product metadata, like `bin/product-info.json` below - and so owned by this fragment alone. It used to be
-          // written while laying out the platform jars, which the lib-owning fragment and the reference target both
-          // do, and each producer then claimed the same file.
-          Files.writeString(runDir.resolve("build.txt"), context.fullBuildNumber)
-
           // PathManager.getBinPath() is used as a working dir for maven
           val binDir = Files.createDirectories(runDir.resolve("bin"))
           val oldFiles = Files.newDirectoryStream(binDir).use { it.toCollection(HashSet()) }
+          oldFiles.removeAll(writePlatformResourceFiles(context, request.os, request.arch, runDir).toSet())
 
-          val libcImpl = LibcImpl.current(request.os)
-
-          val osDistributionBuilder = getOsDistributionBuilder(os = request.os, libcImpl = libcImpl, context = context)
-          if (osDistributionBuilder != null) {
-            oldFiles.remove(osDistributionBuilder.writeVmOptions(binDir))
-            // the file cannot be placed right into the distribution as it throws off home dir detection in `PathManager#getHomeDirFor`
-            val productInfoDir = context.paths.tempDir.resolve("product-info").createDirectories()
-            val productInfoFile = osDistributionBuilder.writeProductInfoFile(productInfoDir, request.arch)
-            oldFiles.remove(productInfoFile.moveTo(binDir.resolve(PRODUCT_INFO_FILE_NAME), overwrite = true))
-            NioFiles.deleteRecursively(productInfoDir)
-            // The natives and the declared OS-specific files belong to a complete build only. A split distribution
-            // takes them from its `platform_assets` component, which places them without build code.
-            if (request.fragment.isComplete) {
+          // The natives and the declared OS-specific files belong to a complete build only. A split distribution
+          // takes them from its `platform_assets` component, which places them without build code.
+          if (request.fragment.isComplete) {
+            val osDistributionBuilder = getOsDistributionBuilder(os = request.os, libcImpl = LibcImpl.current(request.os), context = context)
+            if (osDistributionBuilder != null) {
               val platformLayoutAwaited = checkNotNull(platformLayout).await()
               oldFiles.removeAll(layOutNativeBinFiles(osDistributionBuilder, binDir, runDir, request.arch, platformLayoutAwaited, context))
             }
           }
-
-          val ideaPropertyFile = binDir.resolve(PathManager.PROPERTIES_FILE_NAME)
-          Files.writeString(ideaPropertyFile, createIdeaPropertyFile(context))
-          oldFiles.remove(ideaPropertyFile)
 
           for (oldFile in oldFiles) {
             NioFiles.deleteRecursively(oldFile)
@@ -668,6 +652,36 @@ private fun prepareDevRunDir(request: BuildRequest): Path {
 }
 
 /**
+ * Writes `build.txt`, `bin/idea.properties`, the vmoptions file and `bin/product-info.json` of [context] for [os] and
+ * [arch] into [runDir], and returns the files it wrote. The `platform_resources` fragment owns these files.
+ */
+internal fun writePlatformResourceFiles(context: BuildContext, os: OsFamily, arch: JvmArchitecture, runDir: Path): List<Path> {
+  val result = ArrayList<Path>()
+  // Product metadata, like `bin/product-info.json` below - and so owned by this fragment alone. It used to be written
+  // while laying out the platform jars, which the lib-owning fragment and the reference target both do, and each
+  // producer then claimed the same file.
+  val buildTxt = runDir.resolve("build.txt")
+  Files.writeString(buildTxt, context.fullBuildNumber)
+  result.add(buildTxt)
+
+  val binDir = Files.createDirectories(runDir.resolve("bin"))
+  val osDistributionBuilder = getOsDistributionBuilder(os = os, libcImpl = LibcImpl.current(os), context = context)
+  if (osDistributionBuilder != null) {
+    result.add(osDistributionBuilder.writeVmOptions(binDir))
+    // the file cannot be placed right into the distribution as it throws off home dir detection in `PathManager#getHomeDirFor`
+    val productInfoDir = context.paths.tempDir.resolve("product-info").createDirectories()
+    val productInfoFile = osDistributionBuilder.writeProductInfoFile(productInfoDir, arch)
+    result.add(productInfoFile.moveTo(binDir.resolve(PRODUCT_INFO_FILE_NAME), overwrite = true))
+    NioFiles.deleteRecursively(productInfoDir)
+  }
+
+  val ideaPropertyFile = binDir.resolve(PathManager.PROPERTIES_FILE_NAME)
+  Files.writeString(ideaPropertyFile, createIdeaPropertyFile(context))
+  result.add(ideaPropertyFile)
+  return result
+}
+
+/**
  * Copies the `bin` natives and the declared OS-specific files of a complete distribution, and marks executable the
  * ones a production build would.
  *
@@ -726,7 +740,7 @@ private fun getSearchableOptionSet(context: CompilationContext): SearchableOptio
   }
 }
 
-private fun createBuildContextFromProject(
+internal fun createBuildContextFromProject(
   productConfiguration: ProductConfiguration,
   request: BuildRequest,
   buildDir: Path,

@@ -422,7 +422,7 @@ class MacDistributionBuilder(
               generateQodanaLaunchData(context, arch, OsFamily.MACOS),
               generateStdioMcpRunnerLaunchData(context, OsFamily.MACOS)
             )
-            context.productProperties.launcherCommandsCustomizer?.invoke(base, context) ?: base
+            if (context.productProperties.launcherCustomCommands) base else emptyList()
           }
         )
       ),
@@ -517,7 +517,7 @@ class MacDistributionBuilder(
 
   private fun writeMacOsVmOptions(distBinDir: Path, context: BuildContext): Path {
     val executable = context.productProperties.baseFileName
-    val vmOptions = generateVmOptions(context, extra = listOf("-Dapple.awt.application.appearance=system"))
+    val vmOptions = generateVmOptions(context, extra = osVmOptions(OsFamily.MACOS, context.productProperties.platformPrefix))
     val vmOptionsPath = distBinDir.resolve("${executable}.vmoptions")
     writeVmOptions(vmOptionsPath, vmOptions, separator = "\n")
     return vmOptionsPath

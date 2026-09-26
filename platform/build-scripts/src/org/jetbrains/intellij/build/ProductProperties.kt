@@ -2,7 +2,6 @@
 package org.jetbrains.intellij.build
 
 import com.intellij.openapi.util.io.NioFiles
-import com.intellij.platform.buildData.productInfo.CustomCommandLaunchData
 import com.intellij.platform.buildData.productInfo.CustomProperty
 import com.intellij.platform.buildScripts.licenses.COMMUNITY_LICENSES_LIST
 import com.intellij.platform.buildScripts.licenses.LibraryLicense
@@ -314,9 +313,10 @@ abstract class ProductProperties {
   var additionalDirectoriesWithLicenses: List<Path> = emptyList()
 
   /**
-   * Launcher commands customizer
+   * Whether the launch entry of `product-info.json` lists the custom commands: the embedded frontend, IJ Light, Qodana
+   * and the stdio MCP runner. A product that starts none of them sets it to `false`.
    */
-  var launcherCommandsCustomizer: ((List<CustomCommandLaunchData>, BuildContext) -> List<CustomCommandLaunchData>)? = null
+  var launcherCustomCommands: Boolean = true
 
   /**
    * Custom frontend module filter
@@ -451,9 +451,10 @@ abstract class ProductProperties {
 
   /**
    * Override this function to provide additional JVM command line arguments which will be added to launchers along with
-   * [additionalIdeJvmArguments].
+   * [additionalIdeJvmArguments]. [applicationInfoOf] loads the application info of another product, for arguments
+   * that name it.
    */
-  open fun getAdditionalContextDependentIdeJvmArguments(context: BuildContext): List<String> = emptyList()
+  open fun getAdditionalContextDependentIdeJvmArguments(applicationInfoOf: (ProductProperties) -> ApplicationInfoProperties): List<String> = emptyList()
 
   /**
    * Override this method to programmatically specify content modules for the product plugin.xml.
@@ -572,7 +573,7 @@ abstract class ProductProperties {
   /**
    * Returns IDs of flavors which the current product has. They will be added to the product-info.json file.
    */
-  open fun getProductFlavors(buildContext: BuildContext): List<String> = emptyList()
+  open fun getProductFlavors(): List<String> = emptyList()
 
   /**
    * Properties required for running Qodana application with this product.
