@@ -1062,10 +1062,10 @@ private fun layoutPlatform(
     " they are not jars a selector can partition. Give them an owner before splitting this product."
   }
   val includedModules = selector.selectModules(platformLayout.includedModules)
-  // The fragment decided before the layout existed whether it would need the inlined content-module descriptors: a
-  // fragment that owns `lib/` by exclusion holds the application-info module, since no other producer packs that jar.
-  // Confirm it against the layout that was actually produced: a product that hands that module's jar to another
-  // producer would otherwise ship a product descriptor with nothing inlined into it, which fails far away at runtime.
+  // The fragment decided before the layout existed whether it would need the inlined content-module descriptors. A
+  // fragment that owns `lib/` by exclusion holds the application-info module. Confirm this against the actual layout:
+  // a fragment that packs that module without the inlined descriptors ships a product descriptor with nothing inlined
+  // into it, which fails far away at runtime. The plan generator rules out a content module jar that packs the module.
   val applicationInfoModule = context.productProperties.applicationInfoModule
   check(context.options.embedProductContentModuleDescriptors || includedModules.none { it.moduleName == applicationInfoModule }) {
     "Fragment '${request.fragment}' packs the application-info module '$applicationInfoModule'," +
