@@ -122,7 +122,7 @@ class MacDistributionBuilder(
   }
 
   override fun copyNativeBinFiles(binDir: Path, arch: JvmArchitecture): List<Path> {
-    return copyNativeBinDir(context.paths.communityHomeDir.resolve("bin/mac"), binDir, fileFilter = customizer.binFilesFilter)
+    return nativeBinFiles(context.paths.communityHomeDir, OsFamily.MACOS, arch, customizer.binFilesFilter).map { copyNativeBinFileToDir(it, binDir) }
   }
 
   private fun doCopyFilesForOsDistribution(targetPath: Path, arch: JvmArchitecture, copyDistFiles: Boolean) {

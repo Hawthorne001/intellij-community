@@ -77,10 +77,7 @@ internal class WindowsDistributionBuilder(
     get() = WindowsLibcImpl.DEFAULT
 
   override fun copyNativeBinFiles(binDir: Path, arch: JvmArchitecture): List<Path> {
-    val sourceBinDir = context.paths.communityHomeDir.resolve("bin/win")
-    return copyNativeBinDir(sourceBinDir.resolve(arch.dirName), binDir) +
-           // the top-level files of `bin/win` only - the other architecture's directory is not ours
-           copyNativeBinDir(sourceBinDir, binDir, dirFilter = { it == sourceBinDir })
+    return nativeBinFiles(context.paths.communityHomeDir, OsFamily.WINDOWS, arch).map { copyNativeBinFileToDir(it, binDir) }
   }
 
   override fun copyFilesForOsDistribution(targetPath: Path, arch: JvmArchitecture) {

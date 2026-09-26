@@ -63,8 +63,7 @@ class LinuxDistributionBuilder(
     get() = OsFamily.LINUX
 
   override fun copyNativeBinFiles(binDir: Path, arch: JvmArchitecture): List<Path> {
-    val sourceBinDir = context.paths.communityHomeDir.resolve("bin/linux")
-    return listOf(copyNativeBinFileToDir(sourceBinDir.resolve("${arch.dirName}/fsnotifier"), binDir))
+    return nativeBinFiles(context.paths.communityHomeDir, OsFamily.LINUX, arch).map { copyNativeBinFileToDir(it, binDir) }
   }
 
   override fun copyFilesForOsDistribution(targetPath: Path, arch: JvmArchitecture) {

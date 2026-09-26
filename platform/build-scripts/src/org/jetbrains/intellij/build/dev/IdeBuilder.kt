@@ -286,10 +286,12 @@ internal fun buildProduct(request: BuildRequest, createBuildContext: (buildDir: 
             val productInfoFile = osDistributionBuilder.writeProductInfoFile(productInfoDir, request.arch)
             oldFiles.remove(productInfoFile.moveTo(binDir.resolve(PRODUCT_INFO_FILE_NAME), overwrite = true))
             NioFiles.deleteRecursively(productInfoDir)
-            // The declared OS-specific files belong to a complete build only. A split fragment has no platform layout,
-            // and the `platform_assets` component places those files in its distribution.
-            val declaredIn = if (request.fragment.isComplete) checkNotNull(platformLayout).await() else null
-            oldFiles.removeAll(layOutNativeBinFiles(osDistributionBuilder, binDir, runDir, request.arch, declaredIn, context))
+            // The natives and the declared OS-specific files belong to a complete build only. A split distribution
+            // takes them from its `platform_assets` component, which places them without build code.
+            if (request.fragment.isComplete) {
+              val platformLayoutAwaited = checkNotNull(platformLayout).await()
+              oldFiles.removeAll(layOutNativeBinFiles(osDistributionBuilder, binDir, runDir, request.arch, platformLayoutAwaited, context))
+            }
           }
 
           val ideaPropertyFile = binDir.resolve(PathManager.PROPERTIES_FILE_NAME)
@@ -513,6 +515,9 @@ internal fun buildProduct(request: BuildRequest, createBuildContext: (buildDir: 
 
           if (request.fragment.platformResources) {
             checkNotNull(platformResourcesJob).await()
+          }
+          if (request.fragment.isComplete) {
+            // A split distribution takes these files from its `platform_assets` component.
             context.productProperties.copyAdditionalOsSpecificFiles(
               runDir = runDir,
               os = request.os,
@@ -663,14 +668,14 @@ private fun prepareDevRunDir(request: BuildRequest): Path {
 }
 
 /**
- * Copies the distribution's `bin` natives and marks executable the ones a production build would.
+ * Copies the `bin` natives and the declared OS-specific files of a complete distribution, and marks executable the
+ * ones a production build would.
  *
  * A production distribution gets those permissions when it is archived - `updateExecutablePermissions` over
  * [OsSpecificDistributionBuilder.generateExecutableFilesPatterns]. A dev distribution is never archived, and its
- * sources do not always carry the mode: inside a Bazel action the checkout is a tree that
- * [materializeProjectModelTree] laid out, and it copies without POSIX attributes, so a `755` file in git arrives
- * here as `rw-`. The same patterns therefore decide here, applied to the copied files alone - walking the whole
- * distribution would rewrite the permissions of every jar in it, per assembly.
+ * sources do not always carry the mode. The same patterns therefore decide here, applied to the copied files alone -
+ * walking the whole distribution would rewrite the permissions of every jar in it, per assembly. A split distribution
+ * takes these files from its `platform_assets` component instead.
  *
  * Returns the copied files, which the caller must keep out of the sweep that deletes whatever else is in `bin`.
  */
@@ -679,11 +684,11 @@ private fun layOutNativeBinFiles(
   binDir: Path,
   runDir: Path,
   arch: JvmArchitecture,
-  declaredIn: PlatformLayout?,
+  declaredIn: PlatformLayout,
   context: BuildContext,
 ): List<Path> {
   val copied = osDistributionBuilder.copyNativeBinFiles(binDir, arch) +
-               (declaredIn?.let { osDistributionBuilder.copyDeclaredOsSpecificFiles(runDir, arch, it, context) } ?: emptyList())
+               osDistributionBuilder.copyDeclaredOsSpecificFiles(runDir, arch, declaredIn, context)
   val executableMatchers = osDistributionBuilder.generateExecutableFilesMatchers(includeRuntime = false, arch = arch).keys
   for (file in copied) {
     val relativePath = runDir.relativize(file)
