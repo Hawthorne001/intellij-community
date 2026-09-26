@@ -677,7 +677,6 @@ private fun checkProductLayout(context: BuildContext) {
   }
   val outputProvider = context.outputProvider
   checkModules(layout.productImplementationModules, "productProperties.productLayout.productImplementationModules", outputProvider)
-  checkModules(layout.moduleExcludes.keys, "productProperties.productLayout.moduleExcludes", outputProvider)
   for (plugin in pluginLayouts) {
     checkBaseLayout(plugin, "'${plugin.mainModule}' plugin", context)
   }
