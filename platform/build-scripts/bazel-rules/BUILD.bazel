@@ -51,6 +51,12 @@ dev_dist_tool(
 )
 
 dev_dist_tool(
+    name = "dev_dist_composer",
+    tool = "//build/content-module-packer/dev-dist-composer",
+    visibility = ["//visibility:public"],
+)
+
+dev_dist_tool(
     name = "plugin_descriptor_writer",
     tool = "//build/plugin-descriptor-writer",
     visibility = ["//visibility:public"],

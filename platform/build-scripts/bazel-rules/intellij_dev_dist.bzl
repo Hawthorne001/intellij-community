@@ -219,12 +219,12 @@ _LOCAL_DISK_CACHE_ONLY = {
     "no-remote-exec": "1",
 }
 
-# What the scheduler reserves for one tool JVM, in CPUs and MiB. Without it Bazel books a JVM as a 250 MiB action and
-# starts as many as `--jobs` allows. The memory is the tool's `-Xmx` in `build/BUILD.bazel` plus the JVM's own
+# What the scheduler reserves for one tool, in CPUs and MiB. Without it Bazel books a JVM as a 250 MiB action and
+# starts as many as `--jobs` allows. The memory of a JVM tool is its `-Xmx` in `build/BUILD.bazel` plus the JVM's own
 # overhead and, on Windows, the launcher's `jar` helper. Keep the two sides in step.
 def _small_tool_resources(_os, _inputs):
-    """The composer and the project model tree materializer: `-Xmx2g`, single-threaded."""
-    return {"cpu": 1, "memory": 2560}
+    """The Go composer and the Go project model tree tool. The composer peaks near 105 MiB on the largest local launch."""
+    return {"cpu": 1, "memory": 256}
 
 def _assembler_resources(_os, _inputs):
     """The fragment assembler: `-Xmx8g`, G1 with a few worker threads."""
