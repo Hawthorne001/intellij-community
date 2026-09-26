@@ -2,6 +2,15 @@ load("@community//build:tests-options.bzl", "jps_test")
 load("@rules_java//java:defs.bzl", "java_binary")
 load("@rules_jvm//:jvm.bzl", "jvm_library")
 
+jps_test(
+    name = "buildScripts-runtimeModuleRepository-tests_test",
+    timeout = "moderate",
+    tags = ["community-aggregator"],
+    runtime_deps = [":buildScripts-runtimeModuleRepository-tests_test_lib"],
+)
+
+### skip generation section `test intellij.platform.buildScripts.runtimeModuleRepository.tests`
+
 # The generator of `modules/module-descriptors.dat` and `modules/module-descriptors.jar`. It reads the project model tree, a layout file and the plugin
 # descriptors, and needs no build context. See `RuntimeModuleRepositoryMain.kt` for the options.
 java_binary(
@@ -137,10 +146,3 @@ exports_files(
     visibility = ["//visibility:public"],
 )
 ### auto-generated section `iml intellij.platform.buildScripts.runtimeModuleRepository.tests` end
-
-### auto-generated section `test intellij.platform.buildScripts.runtimeModuleRepository.tests` start
-jps_test(
-    name = "buildScripts-runtimeModuleRepository-tests_test",
-    runtime_deps = [":buildScripts-runtimeModuleRepository-tests_test_lib"],
-)
-### auto-generated section `test intellij.platform.buildScripts.runtimeModuleRepository.tests` end
