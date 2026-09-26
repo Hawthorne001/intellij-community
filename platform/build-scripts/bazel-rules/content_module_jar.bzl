@@ -528,7 +528,7 @@ def _patches(ctx, members):
         patches.append(struct(path = path, file = files[0]))
     if not patches:
         return struct(patches = [], module = None)
-    module = ctx.attr.patched_module or members[0].name
+    module = ctx.attr.patched_module or (members[0].name if members else "")
     if module not in [member.name for member in members]:
         fail("the patched module '%s' is not a member of the jar" % module, attr = "patched_module")
     return struct(patches = patches, module = module)
@@ -537,6 +537,10 @@ def _dev_dist_platform_jar_impl(ctx):
     members = [_module(target, "modules") for target in ctx.attr.modules]
     destination = _relative_output_file(ctx)
     libraries = _library_entries(ctx)
+    if not members and not libraries:
+        fail("a platform jar merges at least one module or library", attr = "modules")
+    if members and ctx.attr.keeps_native_entries:
+        fail("a platform jar with a module member keeps no native file", attr = "keeps_native_entries")
     patches = _patches(ctx, members)
     output = ctx.actions.declare_file(ctx.label.name + "/" + destination)
     spans = _declare_spans(ctx, ctx.label.name)
@@ -549,8 +553,10 @@ def _dev_dist_platform_jar_impl(ctx):
         merged_module_names = [member.name for member in members],
         mnemonic = "PackContentModuleJar",
         progress_message = "Packing the platform jar of %{label}",
-        # A residual jar carries no native file: a module with a presigned library packs as a `content_module_jar`.
-        extra_flags = ["merge-entities=true", "reject-native-entries=true"],
+        # A residual jar with a module member carries no native file: a module with a presigned library packs as a
+        # `content_module_jar`. A library-only jar keeps the native files of a library that is not presigned, as
+        # `JarPackager` does.
+        extra_flags = ["merge-entities=true"] + ([] if ctx.attr.keeps_native_entries else ["reject-native-entries=true"]),
         descriptor_module = patches.module,
         patches = patches.patches,
     )
@@ -570,13 +576,14 @@ def _dev_dist_platform_jar_impl(ctx):
 dev_dist_platform_jar = rule(
     doc = """Packs one generated residual platform jar of a dev distribution.
 
-One `PackContentModuleJar` action writes the jar at `<target>/<relative_output_file>` and its metadata. The jar holds no
-native file. The application-info module jar replaces two entries of the module output with `patches`: the product
-descriptor and the stamped application info.""",
+One `PackContentModuleJar` action writes the jar at `<target>/<relative_output_file>` and its metadata. A jar with a
+module member holds no native file. A library-only jar merges no module and keeps the native files of its libraries. The
+application-info module jar replaces two entries of the module output with `patches`: the product descriptor and the
+stamped application info.""",
     implementation = _dev_dist_platform_jar_impl,
     attrs = {
         "relative_output_file": attr.string(mandatory = True),
-        "modules": attr.label_list(providers = [_KtJvmInfo], mandatory = True),
+        "modules": attr.label_list(providers = [_KtJvmInfo], doc = "The merged modules. Empty for a library-only jar."),
         "libraries": attr.label_list(providers = [[JavaInfo]]),
         "patches": attr.label_keyed_string_dict(
             allow_files = True,
@@ -584,6 +591,9 @@ descriptor and the stamped application info.""",
         ),
         "patched_module": attr.string(
             doc = "The JPS name of the member whose output `patches` replaces entries of. Empty for the first member.",
+        ),
+        "keeps_native_entries": attr.bool(
+            doc = "Whether the jar keeps native files. Only a library-only jar does, for a library that is not presigned.",
         ),
         "_packer": attr.label(default = "//platform/build-scripts/bazel-rules:content_module_packer", executable = True, cfg = "exec"),
         "_trace_spans": attr.label(default = ":trace_spans", providers = [BuildSettingInfo]),
