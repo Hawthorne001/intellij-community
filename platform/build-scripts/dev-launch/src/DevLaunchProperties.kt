@@ -6,7 +6,6 @@ package com.intellij.platform.buildScripts.devLaunch
 import com.intellij.openapi.util.SystemInfoRt
 import com.intellij.platform.buildData.productInfo.CustomCommandLaunchData
 import com.intellij.platform.buildData.productInfo.ProductInfoData
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import org.jetbrains.annotations.ApiStatus
@@ -109,7 +108,6 @@ fun readCustomCommandLaunch(runDir: Path, command: String): Map.Entry<String, Ma
   return java.util.AbstractMap.SimpleImmutableEntry(mainClass, customCommandSystemProperties(launch.resolveAdditionalJvmArguments(runDir)))
 }
 
-@OptIn(ExperimentalSerializationApi::class)
 private fun readProductInfo(runDir: Path): ProductInfoData {
   return runDir.resolve("bin").resolve(PRODUCT_INFO_FILE_NAME).inputStream().buffered().use {
     productInfoJson.decodeFromStream(ProductInfoData.serializer(), it)
