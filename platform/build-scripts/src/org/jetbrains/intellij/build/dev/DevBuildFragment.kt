@@ -16,11 +16,14 @@ import org.jetbrains.intellij.build.impl.ModuleItem
  */
 @ApiStatus.Internal
 data class DevBuildFragment(
-  /** Identifies the fragment in its component manifest and in diagnostics; `platform_lib`, `platform_resources`, `platform_runtime_module_repository`. */
+  /** Identifies the fragment in its component manifest and in diagnostics; `platform_lib`, `platform_runtime_module_repository`. */
   @JvmField val name: String,
   /** The `lib/` jars this fragment owns, or `null` if it owns none. */
   @JvmField val platform: PlatformJarSelector?,
-  /** Whether this fragment owns `bin`, the product metadata, the launchers and the copied product files. */
+  /**
+   * Whether this fragment owns `bin`, the product metadata, the launchers and the copied product files. Only a complete
+   * assembly does. A split distribution renders them with the `platform_resources` component, from the launch model.
+   */
   @JvmField val platformResources: Boolean,
   /** The bundled plugin directories this assembly owns: [PluginFragmentSelector.All] for a complete one, `null` for a fragment. */
   @JvmField val plugins: PluginFragmentSelector?,

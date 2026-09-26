@@ -375,6 +375,10 @@ internal fun vmOptionsFilePath(os: OsFamily, baseFileName: String, languageServe
   }
 }
 
+/** The name of the vmoptions file in `bin` of the distribution of [os]. */
+@ApiStatus.Internal
+fun ProductLaunchModel.vmOptionsFileName(os: OsFamily): String = vmOptionsFileName(os, baseFileName, languageServer)
+
 /** The vmoptions file of a launch, as the distribution holds it. */
 internal fun vmOptionsFileName(os: OsFamily, baseFileName: String, languageServer: Boolean): String {
   return when (os) {

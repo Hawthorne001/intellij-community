@@ -191,24 +191,24 @@ private fun parseFragment(options: CommandLineOptions): DevBuildFragment {
       else -> error("Unknown --platform value '$value', expected except or only")
     }
   }
-  val platformResources = options.optionalBoolean("--platform-resources") ?: false
   val runtimeModuleRepository = options.optionalBoolean("--runtime-module-repository") ?: false
 
   if (name == null) {
-    require(platform == null && !platformResources && !runtimeModuleRepository) {
+    require(platform == null && !runtimeModuleRepository) {
       "--fragment is required to select a part of a distribution; without it the whole distribution is assembled"
     }
     return DevBuildFragment.COMPLETE
   }
 
-  require(platform != null || platformResources || runtimeModuleRepository) {
-    "The '$name' fragment selects nothing: pass at least one of --platform, --platform-resources, --runtime-module-repository"
+  require(platform != null || runtimeModuleRepository) {
+    "The '$name' fragment selects nothing: pass at least one of --platform, --runtime-module-repository"
   }
-  // The plugin directories come from the packed plugin components, so a fragment never owns one.
+  // The plugin directories come from the packed plugin components, so a fragment never owns one. Nor do `bin` and the
+  // product metadata: the `platform_resources` component renders them from the launch model of the product.
   return DevBuildFragment(
     name = name,
     platform = platform,
-    platformResources = platformResources,
+    platformResources = false,
     plugins = null,
     runtimeModuleRepository = runtimeModuleRepository,
   )
