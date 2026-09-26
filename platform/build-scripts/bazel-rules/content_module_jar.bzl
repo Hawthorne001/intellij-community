@@ -539,8 +539,6 @@ def _dev_dist_platform_jar_impl(ctx):
     libraries = _library_entries(ctx)
     if not members and not libraries:
         fail("a platform jar merges at least one module or library", attr = "modules")
-    if members and ctx.attr.keeps_native_entries:
-        fail("a platform jar with a module member keeps no native file", attr = "keeps_native_entries")
     patches = _patches(ctx, members)
     output = ctx.actions.declare_file(ctx.label.name + "/" + destination)
     spans = _declare_spans(ctx, ctx.label.name)
@@ -554,9 +552,9 @@ def _dev_dist_platform_jar_impl(ctx):
         mnemonic = "PackContentModuleJar",
         progress_message = "Packing the platform jar of %{label}",
         # A residual jar with a module member carries no native file: a module with a presigned library packs as a
-        # `content_module_jar`. A library-only jar keeps the native files of a library that is not presigned, as
-        # `JarPackager` does.
-        extra_flags = ["merge-entities=true"] + ([] if ctx.attr.keeps_native_entries else ["reject-native-entries=true"]),
+        # `content_module_jar`. A library-only jar keeps the native files of its libraries, as `JarPackager` does for a
+        # library that the layout places.
+        extra_flags = ["merge-entities=true"] + (["reject-native-entries=true"] if members else []),
         descriptor_module = patches.module,
         patches = patches.patches,
     )
@@ -591,9 +589,6 @@ stamped application info.""",
         ),
         "patched_module": attr.string(
             doc = "The JPS name of the member whose output `patches` replaces entries of. Empty for the first member.",
-        ),
-        "keeps_native_entries": attr.bool(
-            doc = "Whether the jar keeps native files. Only a library-only jar does, for a library that is not presigned.",
         ),
         "_packer": attr.label(default = "//platform/build-scripts/bazel-rules:content_module_packer", executable = True, cfg = "exec"),
         "_trace_spans": attr.label(default = ":trace_spans", providers = [BuildSettingInfo]),

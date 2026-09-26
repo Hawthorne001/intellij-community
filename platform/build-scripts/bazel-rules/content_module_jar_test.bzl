@@ -196,7 +196,7 @@ def _platform_jar_test_impl(ctx):
     # rejects a native entry, because a presigned library packs as a `content_module_jar`. A library-only jar keeps them.
     expected = ["output=" + info.jar.path, "metadata-file=" + info.metadata.path]
     expected += ["keep-manifest=true"] if len(ctx.files.library_jars) + len(ctx.attr.member_modules) == 1 else []
-    expected += ["merge-entities=true"] + ([] if ctx.attr.keeps_native_entries else ["reject-native-entries=true"])
+    expected += ["merge-entities=true"] + (["reject-native-entries=true"] if ctx.attr.member_modules else [])
 
     # A patch precedes the `module=` line of the patched module, so the packer takes the patch instead of the entry of
     # the module output.
@@ -216,7 +216,6 @@ _platform_jar_test = analysistest.make(
         "destination": attr.string(mandatory = True),
         "member_modules": attr.string_list(),
         "library_jars": attr.label_list(allow_files = [".jar"]),
-        "keeps_native_entries": attr.bool(),
         "patch_files": attr.label_list(allow_files = True),
         "patch_paths": attr.string_list(),
     },
@@ -361,14 +360,13 @@ def content_module_jar_test_suite(name):
     tests.append(foreign_patch + "_test")
 
     # A library-only jar merges no module and keeps the native files of its libraries, as `JarPackager` does for a
-    # library that is not presigned. Its manifest follows the same rule as for any other jar.
+    # library that the layout places. Its manifest follows the same rule as for any other jar.
     for case, library, library_jars in [("single", "_single_library", [first]), ("multi", "_library", [second, first])]:
         library_jar = name + "_platform_library_" + case
         dev_dist_platform_jar(
             name = library_jar,
             relative_output_file = "platform-library-%s.jar" % case,
             libraries = [":" + name + library],
-            keeps_native_entries = True,
             tags = ["manual"],
         )
         _platform_jar_test(
@@ -376,27 +374,22 @@ def content_module_jar_test_suite(name):
             target_under_test = ":" + library_jar,
             destination = "platform-library-%s.jar" % case,
             library_jars = [":" + jar for jar in library_jars],
-            keeps_native_entries = True,
         )
         tests.append(library_jar + "_test")
 
-    # A jar with neither a module nor a library, and a jar that keeps native files next to a module member, are refused
-    # at analysis.
-    for case, modules, libraries, keeps_native_entries, expected_message in [
-        ("empty", [], [], False, "a platform jar merges at least one module or library"),
-        ("module_natives", [":" + first], [], True, "a platform jar with a module member keeps no native file"),
-    ]:
-        refused = name + "_platform_refused_" + case
-        dev_dist_platform_jar(
-            name = refused,
-            relative_output_file = "platform-refused.jar",
-            modules = modules,
-            libraries = libraries,
-            keeps_native_entries = keeps_native_entries,
-            tags = ["manual"],
-        )
-        _natives_failure_test(name = refused + "_test", target_under_test = ":" + refused, expected_message = expected_message)
-        tests.append(refused + "_test")
+    # A jar with neither a module nor a library is refused at analysis.
+    refused = name + "_platform_refused_empty"
+    dev_dist_platform_jar(
+        name = refused,
+        relative_output_file = "platform-refused.jar",
+        tags = ["manual"],
+    )
+    _natives_failure_test(
+        name = refused + "_test",
+        target_under_test = ":" + refused,
+        expected_message = "a platform jar merges at least one module or library",
+    )
+    tests.append(refused + "_test")
 
     # A content module jar with a presigned library reserves its natives, and one action per platform writes the tree.
     natives_owner = name + "_natives"
