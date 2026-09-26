@@ -1,0 +1,94 @@
+// Copyright 2000-2026 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+
+package main
+
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	"jetbrains.com/plugin-descriptor-writer/internal/structural"
+)
+
+// productDescriptorRequest contains the declared inputs of the product descriptor, the `META-INF` descriptor of the
+// application-info module.
+//
+// The source is the Product DSL content with the module sets and the deprecated includes inlined. It is the text that
+// `processAndGetProductPluginContentModules` (`productModuleLayout.kt`) loads. The generator writes it, and the plan
+// states the refusals of the product's content filter and the scrambled content modules. So the action loads no project
+// model.
+type productDescriptorRequest struct {
+	embeddedProductRequest
+	mainModule string
+	refused    []string
+	scrambled  map[string]bool
+}
+
+func runProductDescriptor(lines []string) int {
+	parsed, err := parseProductDescriptorRequest(lines)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		return 2
+	}
+	content, err := resolveProductDescriptor(parsed)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: could not resolve the product descriptor (module=%s): %v\n", parsed.mainModule, err)
+		return 1
+	}
+	if err := writeOutput(parsed.output, content); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// resolveProductDescriptor is the part of `processAndGetProductPluginContentModules` (`productModuleLayout.kt`) that
+// follows the load of the source.
+//
+// The includes are resolved first. Then the content filter removes the refused modules, and every other content module
+// receives its descriptor, except a scrambled one. The product descriptor takes no `separate-jar` attribute, because
+// `processProductModule` embeds with no descriptor modifier.
+func resolveProductDescriptor(parsed productDescriptorRequest) (string, error) {
+	return resolveProductContent(parsed.embeddedProductRequest, structural.ContentRequest{
+		MainModule: parsed.mainModule,
+		Refused:    parsed.refused,
+		Scrambled:  parsed.scrambled,
+		Embeds:     true,
+	})
+}
+
+func parseProductDescriptorRequest(lines []string) (productDescriptorRequest, error) {
+	parsed := productDescriptorRequest{embeddedProductRequest: newProductContentRequest(), scrambled: map[string]bool{}}
+	if err := requireMode(lines, productDescriptorMode); err != nil {
+		return parsed, err
+	}
+	for _, line := range lines {
+		if line == "" || line == productDescriptorMode {
+			continue
+		}
+		option, value, _ := strings.Cut(line, "=")
+		handled, err := parseProductContentOption(&parsed.embeddedProductRequest, option, value)
+		if !handled {
+			switch option {
+			case "--main-module":
+				parsed.mainModule = value
+			case "--refused-content-module":
+				parsed.refused = append(parsed.refused, value)
+			case "--scrambled-content-module":
+				parsed.scrambled[value] = true
+			default:
+				err = fmt.Errorf("unknown product descriptor option '%s'", option)
+			}
+		}
+		if err != nil {
+			return parsed, err
+		}
+	}
+	if err := checkProductContentRequest(parsed.embeddedProductRequest); err != nil {
+		return parsed, err
+	}
+	if parsed.mainModule == "" {
+		return parsed, fmt.Errorf("--main-module is required")
+	}
+	return parsed, nil
+}

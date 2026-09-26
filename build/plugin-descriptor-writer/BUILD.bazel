@@ -21,6 +21,8 @@ go_binary(
         "main.go",
         "manifest_windows_amd64.syso",
         "manifest_windows_arm64.syso",
+        "product_descriptor.go",
+        "stamp_application_info.go",
     ],
     # Strip the symbol table and DWARF. A panic trace keeps its function names and line numbers either way, because
     # those come from the runtime's own pclntab.
@@ -198,6 +200,10 @@ go_test(
         "main_test.go",
         "manifest_windows_amd64.syso",
         "manifest_windows_arm64.syso",
+        "product_descriptor.go",
+        "product_descriptor_test.go",
+        "stamp_application_info.go",
+        "stamp_application_info_test.go",
     ],
     data = glob(["testdata/**"]),
     pure = "on",
